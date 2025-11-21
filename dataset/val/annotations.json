@@ -1,0 +1,219 @@
+{
+  "info": {
+    "description": "Sample Solar Panel Dataset - VAL",
+    "version": "1.0",
+    "year": 2024,
+    "contributor": "Auto-generated",
+    "date_created": "2024-01-01"
+  },
+  "images": [
+    {
+      "id": 1,
+      "file_name": "val_0001.jpg",
+      "width": 640,
+      "height": 640
+    },
+    {
+      "id": 2,
+      "file_name": "val_0002.jpg",
+      "width": 640,
+      "height": 640
+    },
+    {
+      "id": 3,
+      "file_name": "val_0003.jpg",
+      "width": 640,
+      "height": 640
+    },
+    {
+      "id": 4,
+      "file_name": "val_0004.jpg",
+      "width": 640,
+      "height": 640
+    },
+    {
+      "id": 5,
+      "file_name": "val_0005.jpg",
+      "width": 640,
+      "height": 640
+    }
+  ],
+  "annotations": [
+    {
+      "id": 1,
+      "image_id": 1,
+      "category_id": 1,
+      "bbox": [
+        211,
+        396,
+        65,
+        47
+      ],
+      "area": 3055,
+      "iscrowd": 0
+    },
+    {
+      "id": 2,
+      "image_id": 1,
+      "category_id": 1,
+      "bbox": [
+        58,
+        97,
+        47,
+        35
+      ],
+      "area": 1645,
+      "iscrowd": 0
+    },
+    {
+      "id": 3,
+      "image_id": 2,
+      "category_id": 1,
+      "bbox": [
+        416,
+        89,
+        43,
+        36
+      ],
+      "area": 1548,
+      "iscrowd": 0
+    },
+    {
+      "id": 4,
+      "image_id": 2,
+      "category_id": 1,
+      "bbox": [
+        275,
+        236,
+        51,
+        21
+      ],
+      "area": 1071,
+      "iscrowd": 0
+    },
+    {
+      "id": 5,
+      "image_id": 2,
+      "category_id": 1,
+      "bbox": [
+        551,
+        60,
+        45,
+        24
+      ],
+      "area": 1080,
+      "iscrowd": 0
+    },
+    {
+      "id": 6,
+      "image_id": 2,
+      "category_id": 1,
+      "bbox": [
+        34,
+        373,
+        33,
+        58
+      ],
+      "area": 1914,
+      "iscrowd": 0
+    },
+    {
+      "id": 7,
+      "image_id": 2,
+      "category_id": 1,
+      "bbox": [
+        538,
+        16,
+        37,
+        33
+      ],
+      "area": 1221,
+      "iscrowd": 0
+    },
+    {
+      "id": 8,
+      "image_id": 3,
+      "category_id": 1,
+      "bbox": [
+        172,
+        324,
+        66,
+        53
+      ],
+      "area": 3498,
+      "iscrowd": 0
+    },
+    {
+      "id": 9,
+      "image_id": 3,
+      "category_id": 1,
+      "bbox": [
+        257,
+        506,
+        67,
+        54
+      ],
+      "area": 3618,
+      "iscrowd": 0
+    },
+    {
+      "id": 10,
+      "image_id": 3,
+      "category_id": 1,
+      "bbox": [
+        281,
+        168,
+        43,
+        27
+      ],
+      "area": 1161,
+      "iscrowd": 0
+    },
+    {
+      "id": 11,
+      "image_id": 4,
+      "category_id": 1,
+      "bbox": [
+        479,
+        141,
+        30,
+        32
+      ],
+      "area": 960,
+      "iscrowd": 0
+    },
+    {
+      "id": 12,
+      "image_id": 4,
+      "category_id": 1,
+      "bbox": [
+        347,
+        318,
+        50,
+        49
+      ],
+      "area": 2450,
+      "iscrowd": 0
+    },
+    {
+      "id": 13,
+      "image_id": 5,
+      "category_id": 1,
+      "bbox": [
+        332,
+        39,
+        30,
+        23
+      ],
+      "area": 690,
+      "iscrowd": 0
+    }
+  ],
+  "categories": [
+    {
+      "id": 1,
+      "name": "solar_panel",
+      "supercategory": "object"
+    }
+  ]
+}
