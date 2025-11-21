@@ -32,8 +32,6 @@ wheels/
 *.pt
 *.pth
 *.onnx
-!models/best.pt
-!models/last.pt
 
 # YOLOv8
 runs/
