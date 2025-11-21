@@ -1,0 +1,7 @@
+names:
+  0: solarpanel
+nc: 1
+path: D:\Idethon\dataset_combined
+test: test/images
+train: train/images
+val: val/images

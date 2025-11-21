@@ -41,16 +41,12 @@ weights/
 dataset/yolo_format/**/*.cache
 
 # Results (keep only essential plots)
+results/solar_panel_detection/
+results/solar_panel_segmentation/
 results/**/weights/
-results/**/*.jpg
-results/**/*.png
-results/**/*.jpeg
-results/**/*.mp4
-results/**/*.avi
-!results/**/results.png
-!results/**/confusion_matrix.png
 results/**/*.csv
 results/**/*.txt
+!results/solar_panel_segmentation2/
 
 # IDE
 .vscode/
