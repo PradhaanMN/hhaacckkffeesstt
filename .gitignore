@@ -28,8 +28,7 @@ wheels/
 .ipynb_checkpoints
 *.ipynb
 
-# PyTorch
-*.pt
+# PyTorch (except models folder - tracked by LFS)
 *.pth
 *.onnx
 
@@ -38,17 +37,7 @@ runs/
 weights/
 *.cache
 
-# Dataset (keep structure, ignore large files)
-dataset/**/images/
-dataset/**/*.jpg
-dataset/**/*.png
-dataset/**/*.jpeg
-dataset/**/*.JPG
-dataset/**/*.PNG
-!dataset/README.md
-
-# YOLO format (keep labels and config only)
-dataset/yolo_format/**/images/
+# Dataset (annotations kept, images tracked by LFS)
 dataset/yolo_format/**/*.cache
 
 # Results (keep only essential plots)
