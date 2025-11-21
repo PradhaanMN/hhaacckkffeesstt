@@ -41,6 +41,7 @@ weights/
 *.cache
 
 # Dataset (keep structure, ignore large files)
+dataset/**/images/
 dataset/**/*.jpg
 dataset/**/*.png
 dataset/**/*.jpeg
@@ -48,12 +49,21 @@ dataset/**/*.JPG
 dataset/**/*.PNG
 !dataset/README.md
 
-# Results
+# YOLO format (keep labels and config only)
+dataset/yolo_format/**/images/
+dataset/yolo_format/**/*.cache
+
+# Results (keep only essential plots)
+results/**/weights/
 results/**/*.jpg
 results/**/*.png
 results/**/*.jpeg
 results/**/*.mp4
 results/**/*.avi
+!results/**/results.png
+!results/**/confusion_matrix.png
+results/**/*.csv
+results/**/*.txt
 
 # IDE
 .vscode/
