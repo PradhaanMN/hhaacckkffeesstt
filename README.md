@@ -320,7 +320,8 @@ ls results/predictions/
 
 - [Ultralytics YOLOv8 Documentation](https://docs.ultralytics.com/)
 - [COCO Dataset Format](https://cocodataset.org/#format-data)
-- [Original Project Blog](https://medium.com/@jacobschwarz00/counting-with-computers-using-yolo-to-spot-solar-panels-in-satellite-imagery-d9ea874491a7)
+- [YOLOv8 Training Guide](https://docs.ultralytics.com/modes/train/)
+- [PyTorch Documentation](https://pytorch.org/docs/stable/index.html)
 
 ## 🤝 Support
 
@@ -329,12 +330,6 @@ For issues or questions:
 2. Review training logs in `results/training_log.txt`
 3. Verify dataset format with `python visualize.py --stats-only`
 
-## 📄 License
-
-This project is set up for the solar panel detection task based on the original repository at:
-https://github.com/jacob-schwarz0/solar-panel-detection
-
----
 
 **Ready to start?** Place your COCO dataset in `dataset/` and run:
 ```powershell
