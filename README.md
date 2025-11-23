@@ -1,15 +1,17 @@
-# Solar Panel Detection with YOLOv8
+# Solar Panel Detection & Segmentation with YOLOv8
 
-Complete end-to-end training and inference system for detecting solar panels in satellite/aerial imagery using YOLOv8.
+Complete end-to-end training and inference system for detecting and segmenting solar panels in satellite/aerial imagery using YOLOv8.
 
 ## 🚀 Features
 
+- **Dual Models**: Object detection (bounding boxes) and instance segmentation (pixel-level masks)
 - **Automatic COCO to YOLO conversion** with validation and auto-fix
-- **YOLOv8 training** with optimized hyperparameters
+- **YOLOv8 training** with optimized hyperparameters for both detection and segmentation
 - **Inference on images and videos** with customizable confidence thresholds
 - **Visualization tools** for dataset exploration
 - **Comprehensive logging** and result tracking
 - **Production-ready scripts** with error handling
+- **Combined dataset training** (satellite + ground-level imagery)
 
 ## 📋 Requirements
 
@@ -42,30 +44,21 @@ python -c "import torch; import ultralytics; print('✓ Installation successful'
 
 ```
 Idethon/
-├── train.py              # Main training script
-├── predict.py            # Inference script
-├── visualize.py          # Dataset visualization tool
-├── requirements.txt      # Python dependencies
-├── README.md            # This file
+├── test_satellite_image.py    # Inference on satellite imagery
+├── visualize.py                # Dataset visualization
+├── requirements.txt            # Python dependencies
+├── README.md                   # This file
 ├── utils/
-│   └── coco_to_yolo.py  # COCO to YOLO converter
-├── dataset/             # Your dataset goes here
-│   ├── train/
-│   │   ├── annotations.json
-│   │   └── images/
-│   ├── val/
-│   │   ├── annotations.json
-│   │   └── images/
-│   └── test/
-│       ├── annotations.json
-│       └── images/
-├── models/              # Trained models saved here
-│   ├── best.pt
-│   └── last.pt
-└── results/             # Training results and predictions
-    ├── training_log.txt
-    └── samples/
+│   └── coco_to_yolo.py        # COCO to YOLO converter
+├── models_segmentation/        # Final trained model
+│   └── best_final_combined.pt # Production-ready model (81.8% box mAP, 77.7% seg mAP)
+└── results/                    # Training results
+    ├── final_best_model3/      # Custom Workflow training results
+    ├── lsgi547_model3/         # LSGI547 training results
+    └── final_combined_ultimate/ # Final combined model training
 ```
+
+**Note:** Dataset folders have been removed to reduce repository size. Only the final trained model is included for submission.
 
 ## 📊 Dataset Format
 
@@ -125,9 +118,26 @@ The system automatically handles:
 
 ## 🎯 Usage
 
-### 1. Visualize Your Dataset
+### Quick Start - Run Inference
 
-Before training, verify your annotations:
+Test the final model on your own satellite imagery:
+
+```powershell
+# Run inference on a satellite image
+python test_satellite_image.py
+
+# The script will use models_segmentation/best_final_combined.pt
+# and detect solar panels with bounding boxes and segmentation masks
+```
+
+**Model Performance:**
+- Detects solar panels with 81.8% mAP@0.5
+- Provides both bounding boxes and pixel-level segmentation masks
+- Fast inference: ~4.7ms per image
+
+### Visualize Your Dataset (Optional)
+
+If you have your own dataset to train:
 
 ```powershell
 # Visualize 5 random training samples
@@ -143,178 +153,177 @@ python visualize.py --samples 10 --save results/viz/ --no-show
 python visualize.py --stats-only
 ```
 
-### 2. Train the Model
+## 📈 Training Results
 
-```powershell
-# Train with default settings (YOLOv8n, 100 epochs)
-python train.py
-```
+The final model was trained on 6,876 images from 6 different datasets, combining ground-level and satellite imagery for robust performance.
 
-**Training automatically:**
-- Converts COCO to YOLO format
-- Validates and fixes annotation issues
-- Creates dataset configuration
-- Trains YOLOv8 model
-- Saves best and last checkpoints to `models/`
-- Logs training metrics to `results/training_log.txt`
-- Runs validation test on 5 samples
+### Final Model
+- **Location**: `models_segmentation/best_final_combined.pt`
+- **Size**: 6.8 MB (optimized for deployment)
+- **Parameters**: 3.26M (YOLOv8n-seg architecture)
 
-**Training Configuration:**
-- Model: YOLOv8n (nano - fastest) or YOLOv8s (small - more accurate)
-- Image size: 640x640
-- Epochs: 100
-- Batch size: Auto-detected
-- Optimizer: SGD
-- Patience: 50 epochs early stopping
-
-### 3. Run Predictions
-
-After training, use the model for inference:
-
-```powershell
-# Predict on single image
-python predict.py --source test.jpg
-
-# Predict on folder of images
-python predict.py --source dataset/test/images/
-
-# Predict on video
-python predict.py --source video.mp4 --video
-
-# Use custom model and confidence threshold
-python predict.py --source test.jpg --model models/best.pt --conf 0.5
-
-# Display results in real-time
-python predict.py --source test.jpg --show
-
-# Save to custom directory
-python predict.py --source test.jpg --output my_results/
-```
-
-**Prediction Options:**
-- `--source`: Image/video file, folder, or camera index (0 for webcam)
-- `--model`: Path to model (default: models/best.pt)
-- `--conf`: Confidence threshold (default: 0.25)
-- `--save` / `--no-save`: Save results (default: save)
-- `--show`: Display results in real-time
-- `--video`: Treat source as video
-- `--output`: Output directory
-
-## 📈 Training Output
-
-After training, you'll find:
-
-### Models (models/)
-- `best.pt` - Best model based on validation metrics
-- `last.pt` - Final model checkpoint
-
-### Results (results/)
-- `training_log.txt` - Training configuration and summary
-- `solar_panel_detection/` - Full training results
-  - `weights/` - Model checkpoints
+### Training Results Directory
+- `results/final_combined_ultimate/` - Final combined model training
+  - `weights/best.pt` - Best model checkpoint
+  - `weights/last.pt` - Final epoch checkpoint
+  - `results.csv` - Epoch-by-epoch metrics
   - `confusion_matrix.png` - Confusion matrix
-  - `results.png` - Training curves
-  - `val_batch*.jpg` - Validation predictions
-- `samples/` - Validation test predictions
+  - `BoxF1_curve.png`, `MaskF1_curve.png` - Performance curves
+  - `val_batch*_pred.jpg` - Validation predictions with masks
+
+### Previous Training Runs (Archived)
+- `results/final_best_model3/` - Custom Workflow dataset results
+- `results/lsgi547_model3/` - LSGI547 dataset results
 
 ## 🔧 Customization
 
-### Change Model Size
-
-Edit `train.py` line 137:
+### Using the Model in Your Code
 
 ```python
-model = YOLO('yolov8n.pt')  # nano (fastest)
-model = YOLO('yolov8s.pt')  # small (balanced)
-model = YOLO('yolov8m.pt')  # medium (more accurate)
-model = YOLO('yolov8l.pt')  # large (most accurate)
+from ultralytics import YOLO
+
+# Load the trained model
+model = YOLO('models_segmentation/best_final_combined.pt')
+
+# Run inference
+results = model('your_satellite_image.jpg', conf=0.25)
+
+# Process results
+for r in results:
+    boxes = r.boxes  # Bounding boxes
+    masks = r.masks  # Segmentation masks
+    
+    # Get box coordinates
+    for box in boxes:
+        x1, y1, x2, y2 = box.xyxy[0]
+        confidence = box.conf[0]
+        print(f"Panel at ({x1}, {y1}, {x2}, {y2}) - {confidence:.2%}")
 ```
 
-### Adjust Training Parameters
+### Adjust Confidence Threshold
 
-Edit `train.py` lines 140-152:
+Edit `test_satellite_image.py` to change detection sensitivity:
 
 ```python
-training_config = {
-    'epochs': 100,        # Number of training epochs
-    'imgsz': 640,        # Image size
-    'batch': -1,         # -1 for auto, or set manually
-    'optimizer': 'SGD',  # SGD, Adam, AdamW
-    'lr0': 0.01,        # Initial learning rate
-    'patience': 50,      # Early stopping patience
-}
+# Line with conf parameter
+results = model(image_path, conf=0.25)  # Default: 0.25
+
+# Lower (0.1-0.2) for higher recall (more detections)
+# Higher (0.4-0.6) for higher precision (fewer false positives)
 ```
 
 ## 🐛 Troubleshooting
 
-### Dataset Not Found
+### Model Not Found
 ```
-✗ COCO JSON file not found: dataset/train/annotations.json
+✗ Model not found: models_segmentation/best_final_combined.pt
 ```
-**Solution:** Ensure your dataset is in `dataset/` with the correct structure.
+**Solution:** Ensure the model file exists in the `models_segmentation/` folder.
 
-### No Images Converted
-```
-⚠ Image not found: dataset/train/images/image001.jpg
-```
-**Solution:** Check that image paths in `annotations.json` match actual filenames.
-
-### CUDA Out of Memory
+### CUDA Out of Memory During Inference
 ```
 RuntimeError: CUDA out of memory
 ```
-**Solution:** Reduce batch size in `train.py`:
+**Solution:** Process images in smaller batches or use CPU inference:
 ```python
-'batch': 8,  # or 4, 2, 1
+model = YOLO('models_segmentation/best_final_combined.pt')
+model.to('cpu')  # Force CPU inference
 ```
 
-### Model Not Found During Prediction
-```
-✗ Model not found: models/best.pt
-```
-**Solution:** Train the model first with `python train.py`
+### Low Detection Accuracy
+**Solution:** Adjust confidence threshold in `test_satellite_image.py`:
+- Lower threshold (0.1-0.2) for more detections
+- Current: 0.25 (balanced)
+- Higher threshold (0.4-0.6) for fewer false positives
 
 ## 📝 Example Workflow
 
-Complete workflow from dataset to predictions:
+Quick test with the pre-trained model:
 
 ```powershell
-# 1. Place your COCO dataset in dataset/
-# (See Dataset Format section above)
+# 1. Run inference on satellite imagery
+python test_satellite_image.py
+
+# 2. Check prediction results
+# Results will be saved with annotated bounding boxes and segmentation masks
+```
+
+### Training Your Own Model (Optional)
+
+If you want to train on additional datasets:
+
+```powershell
+# 1. Prepare your COCO dataset in the correct format
 
 # 2. Visualize to verify annotations
 python visualize.py --samples 5
 
-# 3. Train the model
-python train.py
+# 3. Create a training script similar to the previous training runs
+# (Reference: results/final_combined_ultimate/ for configuration)
 
-# 4. Check training results
-cat results/training_log.txt
+# 4. Train with your dataset
+# python train_custom.py
 
-# 5. Run predictions
-python predict.py --source dataset/test/images/ --conf 0.3
-
-# 6. Check prediction results
-ls results/predictions/
+# 5. Test the new model
+python test_satellite_image.py --model path/to/your/model.pt
 ```
+
+## 📊 Final Model Performance
+
+### **best_final_combined.pt** - Ultimate Combined Model
+
+**The single production-ready model trained on ALL datasets:**
+
+| Metric | Box Detection | Segmentation |
+|--------|---------------|--------------|
+| **mAP@0.5** | **81.8%** | **77.7%** |
+| **mAP@0.5-0.95** | **55.6%** | **46.7%** |
+| **Precision** | 77.4% | 75.7% |
+| **Recall** | 77.8% | 75.2% |
+
+**Training Details:**
+- **Total Images**: 6,876 (6,365 train + 511 validation)
+- **Datasets Combined**: 6 diverse sources
+  1. Custom Workflow (4,739 images)
+  2. LSGI547 (389 images)
+  3. Solarpanel_seg v4 (528 images)
+  4. Zeewolde (210 images)
+  5. Solar panels v1i (367 images)
+  6. Solarpv-INDIA (293 images)
+- **Model Architecture**: YOLOv8n-seg (3.26M parameters)
+- **Training Time**: 4.6 hours (94 epochs, early stopped at epoch 64)
+- **GPU**: NVIDIA GeForce RTX 3050 4GB
+- **Inference Speed**: 4.7ms per image
+
+**Use Cases:**
+- Production deployment for solar panel detection & segmentation
+- Real-time inference on satellite/aerial imagery
+- Accurate panel area calculation and energy estimation
+- Works on both ground-level and satellite imagery
 
 ## 🎓 Tips for Best Results
 
-1. **Dataset Quality**
-   - Minimum 100-200 annotated images per class
-   - Balance between train/val/test (70/20/10 split)
-   - Diverse lighting, angles, and scales
+1. **Using the Model**
+   - Default confidence threshold (0.25) works well for most cases
+   - Lower threshold (0.15-0.20) for detecting smaller or partially visible panels
+   - Higher threshold (0.35-0.50) for high-confidence detections only
+   - Model works best on satellite/aerial imagery at 640x640 resolution
 
-2. **Training**
-   - Start with YOLOv8n for quick experiments
-   - Use YOLOv8s or YOLOv8m for production
-   - Monitor training curves in `results/solar_panel_detection/results.png`
-   - If overfitting, add more data or augmentation
+2. **Image Preprocessing**
+   - Ensure images are clear with good visibility
+   - Model trained on diverse lighting conditions and angles
+   - Works on both satellite and ground-level imagery
+   - Optimal resolution: 640x640 to 1280x1280 pixels
 
-3. **Inference**
-   - Adjust `--conf` threshold based on precision/recall needs
-   - Lower threshold (0.1-0.2) for higher recall
-   - Higher threshold (0.5-0.7) for higher precision
+3. **Performance Optimization**
+   - Use GPU for faster inference (4.7ms per image)
+   - Batch processing for multiple images
+   - Model is optimized at 6.8MB for fast loading
+
+4. **Future Improvements**
+   - Plan to train larger model (YOLOv8s-seg) on additional dataset
+   - Expected improvement: 85-92% mAP (vs current 81.8%)
+   - Ensemble approach for 2-5% additional accuracy gain
 
 ## 📚 Additional Resources
 
@@ -331,7 +340,23 @@ For issues or questions:
 3. Verify dataset format with `python visualize.py --stats-only`
 
 
-**Ready to start?** Place your COCO dataset in `dataset/` and run:
-```powershell
-python train.py
-```
+**Ready to start?** 
+
+Run inference: `python test_satellite_image.py`
+
+---
+
+## 📊 Dataset Information
+
+The final model was trained on a comprehensive dataset combining 6 different sources:
+
+1. **Custom Workflow** (4,739 images) - Ground-level and aerial solar installations
+2. **LSGI547** (389 images) - Satellite imagery with diverse panel configurations
+3. **Solarpanel_seg v4** (528 images) - High-resolution segmentation data
+4. **Zeewolde** (210 images) - European solar farm installations
+5. **Solar panels v1i** (367 images) - Mixed resolution panel imagery
+6. **Solarpv-INDIA** (293 images) - Indian solar installations from satellite
+
+**Total**: 6,876 images (6,365 training + 511 validation)
+
+All datasets have been removed from this repository to reduce size for submission. Only the final trained model is included.

@@ -1,8 +1,0 @@
-names:
-  0: Solarpanels
-  1: Solarpanel
-nc: 2
-path: D:\Idethon\dataset\yolo_format
-test: test/images
-train: train/images
-val: val/images
