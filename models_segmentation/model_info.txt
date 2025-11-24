@@ -1,0 +1,36 @@
+SOLAR PANEL SEGMENTATION MODEL v1.0
+======================================================================
+
+Model Name: solarpanel_seg_v1.pt
+Architecture: YOLOv8s-seg Ensemble (11.79M parameters)
+Total Training Images: 1638
+Total Annotations: 13933
+
+MODELS IN ENSEMBLE:
+----------------------------------------------------------------------
+1. Nano (3.26M params)
+   Performance: 81.8% mAP
+   Weight: 25.0%
+   Path: models_segmentation\best_final_combined.pt
+
+2. Small-Single (11.79M params)
+   Performance: ~85% mAP
+   Weight: 35.0%
+   Path: results\solar_panel_yolov8s\weights\best.pt
+
+3. Small-Combined (11.79M params)
+   Performance: 94.3% mAP
+   Weight: 40.0%
+   Path: results\all_combined_yolov8s\weights\best.pt
+
+PRIMARY MODEL:
+----------------------------------------------------------------------
+Model: Small-Combined (11.79M params)
+Performance: 94.3% mAP
+Saved as: models_segmentation\solarpanel_seg_v1.pt
+
+USAGE:
+----------------------------------------------------------------------
+from ultralytics import YOLO
+model = YOLO('models_segmentation/solarpanel_seg_v1.pt')
+results = model.predict('image.jpg', conf=0.25)

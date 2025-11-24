@@ -50,12 +50,9 @@ Idethon/
 ├── README.md                   # This file
 ├── utils/
 │   └── coco_to_yolo.py        # COCO to YOLO converter
-├── models_segmentation/        # Final trained model
-│   └── best_final_combined.pt # Production-ready model (81.8% box mAP, 77.7% seg mAP)
-└── results/                    # Training results
-    ├── final_best_model3/      # Custom Workflow training results
-    ├── lsgi547_model3/         # LSGI547 training results
-    └── final_combined_ultimate/ # Final combined model training
+└── models_segmentation/        # Final trained model
+    ├── solarpanel_seg_v1.pt   # Production-ready model (94.3% mAP, 11.79M params)
+    └── model_info.txt         # Model documentation
 ```
 
 **Note:** Dataset folders have been removed to reduce repository size. Only the final trained model is included for submission.
@@ -126,13 +123,14 @@ Test the final model on your own satellite imagery:
 # Run inference on a satellite image
 python test_satellite_image.py
 
-# The script will use models_segmentation/best_final_combined.pt
+# The script will use models_segmentation/solarpanel_seg_v1.pt
 # and detect solar panels with bounding boxes and segmentation masks
 ```
 
 **Model Performance:**
-- Detects solar panels with 81.8% mAP@0.5
+- Detects solar panels with 94.3% mAP@0.5
 - Provides both bounding boxes and pixel-level segmentation masks
+- Fast inference: ~10ms per image on GPU
 - Fast inference: ~4.7ms per image
 
 ### Visualize Your Dataset (Optional)

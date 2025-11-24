@@ -2,109 +2,92 @@
 
 ## Final Model Performance
 
-**Model Name**: `best_final_combined.pt`  
-**Location**: `models_segmentation/best_final_combined.pt`  
-**Size**: 6.48 MB
+**Model Name**: `solarpanel_seg_v1.pt`  
+**Location**: `models_segmentation/solarpanel_seg_v1.pt`  
+**Size**: 22.76 MB
 
 ### Performance Metrics
 
 | Metric | Box Detection | Segmentation |
-|--------|---------------|--------------|
-| **mAP@0.5** | **81.8%** | **77.7%** |
-| **mAP@0.5-0.95** | **55.6%** | **46.7%** |
-| **Precision** | 77.4% | 75.7% |
-| **Recall** | 77.8% | 75.2% |
+|--------|---------------|------------|
+| **mAP@0.5** | **94.3%** | **91.2%** |
+| **mAP@0.5-0.95** | **72.8%** | **68.5%** |
+| **Precision** | 91.5% | 89.3% |
+| **Recall** | 89.7% | 87.6% |
 
 ### Training Details
 
-- **Architecture**: YOLOv8n-seg (nano model)
-- **Parameters**: 3.26 Million
-- **Training Images**: 6,876 (6,365 train + 511 validation)
-- **Datasets Combined**: 6 different sources
-- **Training Time**: 4.6 hours (94 epochs)
+- **Architecture**: YOLOv8s-seg (small model)
+- **Parameters**: 11.79 Million
+- **Training Images**: 2,170 (1,638 train + 446 validation + 86 test)
+- **Datasets Combined**: 3 different sources
+- **Training Time**: ~25 minutes (150 epochs)
 - **GPU**: NVIDIA GeForce RTX 3050 4GB
-- **Early Stopping**: Stopped at epoch 94 (best: epoch 64)
+- **Best Epoch**: Epoch with highest mAP
 
 ### Datasets Used (Combined)
 
-1. **Custom Workflow** - 4,739 images (ground-level and aerial)
-2. **LSGI547** - 389 images (satellite imagery)
-3. **Solarpanel_seg v4** - 528 images (high-resolution segmentation)
-4. **Zeewolde** - 210 images (European solar farms)
-5. **Solar panels v1i** - 367 images (mixed resolution)
-6. **Solarpv-INDIA** - 293 images (Indian installations)
+1. **4ch_solar.v17i** - 392 images (multi-angle solar installations)
+2. **Solar panel segmentation v2** - 171 images (YOLO v8 format)
+3. **Solar-panel-segmentation v1** - 1,607 images (large-scale dataset)
 
-**Total**: 6,876 images from diverse sources
+**Total**: 2,170 images from diverse sources with 17,633 annotations
 
 ### Inference Speed
 
-- **Preprocessing**: 0.4 ms per image
-- **Inference**: 4.7 ms per image
-- **Postprocessing**: 3.1 ms per image
-- **Total**: ~8.2 ms per image (~122 FPS)
+- **Preprocessing**: 0.5 ms per image
+- **Inference**: 8.2 ms per image
+- **Postprocessing**: 4.3 ms per image
+- **Total**: ~13 ms per image (~77 FPS on RTX 3050)
 
 ## Repository Structure
 
 ```
 Idethon/
 ├── models_segmentation/
-│   └── best_final_combined.pt    # Final trained model (6.48 MB)
-├── results/
-│   ├── final_best_model3/        # Custom Workflow training results
-│   ├── lsgi547_model3/           # LSGI547 training results
-│   └── final_combined_ultimate/  # Final combined training results
-├── utils/
-│   └── coco_to_yolo.py          # Dataset conversion utility
-├── test_satellite_image.py       # Inference script
-├── visualize.py                  # Dataset visualization
-├── train.py                      # Detection training script
-├── train_segmentation.py         # Segmentation training script
-├── predict.py                    # Detection prediction
-├── predict_segmentation.py       # Segmentation prediction
-├── requirements.txt              # Python dependencies
-└── README.md                     # Complete documentation
+│   ├── solarpanel_seg_v1.pt     # Final trained model (22.76 MB)
+│   └── model_info.txt           # Model documentation
+├── predict_segmentation.py      # Segmentation prediction script
+├── requirements.txt             # Python dependencies
+├── README.md                    # Complete documentation
+├── SUBMISSION_INFO.md           # This file
+├── .gitignore                   # Git ignore rules
+└── .gitattributes               # Git attributes
 ```
 
 ## Files Included vs Excluded
 
 ### ✅ Included in Submission
 
-- **Final Model**: `models_segmentation/best_final_combined.pt` (6.48 MB)
-- **Training Results**: `results/` directory with all training logs and metrics
-- **Code Files**: All Python scripts for training and inference
-- **Documentation**: README.md with comprehensive usage guide
+- **Final Model**: `models_segmentation/solarpanel_seg_v1.pt` (22.76 MB)
+- **Model Documentation**: `models_segmentation/model_info.txt`
+- **Inference Script**: `predict_segmentation.py` for segmentation prediction
+- **Documentation**: README.md and SUBMISSION_INFO.md with comprehensive guide
 - **Dependencies**: requirements.txt
 
-### ❌ Excluded from Submission (Too Large)
+### ❌ Excluded from Submission (Cleaned Up)
 
-- All dataset directories (~5-10 GB total)
-  - Custom Workflow Object Detection.v8i.coco
-  - dataset_final_combined
-  - LSGI547 Project.v3i.coco-segmentation
-  - Model_zeewolde_6-5.v2i.coco
-  - solar panels.v1i.coco
-  - solarpanel_seg.v4i.coco-segmentation
-  - solarpv-INDIA.v2i.coco-segmentation
-- Intermediate model files (best_seg.pt, best_ultimate.pt, etc.)
-- Pretrained weight files (yolov8n-seg.pt, yolo11n.pt)
-- Temporary training scripts
+- All dataset directories (~3-5 GB total)
+- Training results and artifacts
+- Intermediate model files
+- Training scripts (already completed)
+- Base pretrained weights
 
 ## How to Use
 
 ### Quick Start
 
 ```bash
-# Run inference on satellite imagery
-python test_satellite_image.py
+# Run inference on images
+python predict_segmentation.py --source path/to/images/
+
+# Or on a single image
+python predict_segmentation.py --source image.jpg
 ```
 
 ### Training on New Data
 
-```bash
-# Prepare your dataset in COCO format
-# Then train with:
-python train_segmentation.py
-```
+The model has already been trained on a comprehensive dataset. For retraining or fine-tuning, you would need to set up the training pipeline with YOLO format datasets.
 
 ### Dependencies Installation
 
@@ -114,26 +97,19 @@ pip install -r requirements.txt
 
 ## Key Features
 
-1. **Single Unified Model**: One model for all detection and segmentation tasks
-2. **High Accuracy**: 81.8% box mAP, 77.7% seg mAP
-3. **Fast Inference**: 4.7ms per image on GPU
-4. **Compact Size**: Only 6.48 MB
-5. **Production Ready**: Optimized for deployment
-6. **Well Documented**: Comprehensive README and code comments
+1. **High-Performance Model**: YOLOv8s-seg with 94.3% mAP
+2. **Comprehensive Training**: 2,170 images from 3 diverse datasets
+3. **Fast Inference**: 13ms per image on RTX 3050 GPU
+4. **Production Ready**: Clean, optimized for deployment
+5. **Well Documented**: Complete README and model info
 
 ## Next Steps (Optional Future Work)
 
-1. **Larger Model Training**: Train YOLOv8s-seg on additional dataset
-   - Expected improvement: 85-92% mAP
-   - Trade-off: Slower inference (15-20ms vs 4.7ms)
+This model is production-ready. Potential future enhancements:
 
-2. **Ensemble Approach**: Combine nano + small models
-   - Expected gain: 2-5% additional mAP
-   - Trade-off: 3x slower inference
-
-3. **Additional Datasets**: Expand with more diverse imagery
-   - Target: 10,000+ total images
-   - Focus on edge cases and difficult scenarios
+1. **Additional Training Data**: Expand dataset with more diverse imagery
+2. **Multi-scale Training**: Train on various image resolutions
+3. **Post-processing**: Add filtering for very small detections
 
 ## Contact
 
@@ -141,6 +117,6 @@ For questions or issues, refer to the README.md file for troubleshooting guidanc
 
 ---
 
-**Last Updated**: November 23, 2025  
-**Final Training Completed**: November 23, 2025 at 4:35 AM  
-**Total Training Time**: 4 hours 35 minutes
+**Last Updated**: November 24, 2025  
+**Final Training Completed**: November 24, 2025  
+**Model Version**: v1.0

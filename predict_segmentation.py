@@ -8,7 +8,7 @@ from pathlib import Path
 from ultralytics import YOLO
 import cv2
 
-def predict_segmentation(source, model_path="models_segmentation/best_seg.pt", conf=0.25, save=True):
+def predict_segmentation(source, model_path="models_segmentation/solarpanel_seg_v1.pt", conf=0.25, save=True, show=True):
     """
     Run segmentation prediction on images/videos
     
@@ -17,6 +17,7 @@ def predict_segmentation(source, model_path="models_segmentation/best_seg.pt", c
         model_path: Path to trained segmentation model
         conf: Confidence threshold
         save: Whether to save results
+        show: Whether to display images interactively
     """
     print("\n" + "="*60)
     print("YOLOV8 SOLAR PANEL SEGMENTATION - INFERENCE")
@@ -26,7 +27,11 @@ def predict_segmentation(source, model_path="models_segmentation/best_seg.pt", c
     model_path = Path(model_path)
     if not model_path.exists():
         print(f"\n❌ Model not found: {model_path}")
-        print("   Please train the model first: python train_segmentation.py")
+        print("   Available models:")
+        models_dir = Path("models_segmentation")
+        if models_dir.exists():
+            for model_file in models_dir.glob("*.pt"):
+                print(f"   - {model_file}")
         return
     
     print(f"\nModel: {model_path}")
@@ -51,6 +56,34 @@ def predict_segmentation(source, model_path="models_segmentation/best_seg.pt", c
         line_width=2,
         verbose=True
     )
+    
+    # Display results interactively
+    if show:
+        print("\n→ Displaying results (press any key to continue, ESC to skip remaining)...")
+        for i, r in enumerate(results):
+            # Get the plotted image with boxes and masks
+            plotted_img = r.plot()
+            
+            # Display
+            window_name = f"Solar Panel Detection - Image {i+1}/{len(results)}"
+            cv2.imshow(window_name, plotted_img)
+            
+            # Wait for key press
+            key = cv2.waitKey(0)
+            
+            # Close window
+            try:
+                cv2.destroyWindow(window_name)
+            except:
+                pass
+            
+            # ESC key to stop showing remaining images
+            if key == 27:
+                print("   Skipping remaining images...")
+                cv2.destroyAllWindows()
+                break
+        
+        cv2.destroyAllWindows()
     
     # Print results summary
     print("\n" + "="*60)
@@ -78,12 +111,14 @@ def main():
     parser = argparse.ArgumentParser(description="YOLOv8 Solar Panel Segmentation Inference")
     parser.add_argument("--source", type=str, required=True, 
                        help="Path to image, directory, or video")
-    parser.add_argument("--model", type=str, default="models_segmentation/best_seg.pt",
+    parser.add_argument("--model", type=str, default="models_segmentation/solarpanel_seg_v1.pt",
                        help="Path to trained segmentation model")
     parser.add_argument("--conf", type=float, default=0.25,
                        help="Confidence threshold (0-1)")
     parser.add_argument("--no-save", action="store_true",
                        help="Don't save prediction images")
+    parser.add_argument("--no-show", action="store_true",
+                       help="Don't display images interactively")
     
     args = parser.parse_args()
     
@@ -91,7 +126,8 @@ def main():
         source=args.source,
         model_path=args.model,
         conf=args.conf,
-        save=not args.no_save
+        save=not args.no_save,
+        show=not args.no_show
     )
 
 if __name__ == "__main__":
