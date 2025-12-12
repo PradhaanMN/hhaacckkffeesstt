@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoInnovators Ideathon 2026 - Rooftop PV Detection</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .header .subtitle {
+            color: #666;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+
+        .header .challenge {
+            color: #667eea;
+            font-weight: bold;
+            font-size: 1em;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 968px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #555;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.95em;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group small {
+            display: block;
+            color: #888;
+            margin-top: 5px;
+            font-size: 0.85em;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .result {
+            display: none;
+        }
+
+        .result.active {
+            display: block;
+        }
+
+        .result-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .result-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .result-item label {
+            display: block;
+            color: #666;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .result-item value {
+            display: block;
+            color: #333;
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+
+        .status-verifiable {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-not-verifiable {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .has-solar-yes {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .has-solar-no {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .overlay-image {
+            width: 100%;
+            border-radius: 8px;
+            margin-top: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border-left: 4px solid #f5c6cb;
+            display: none;
+        }
+
+        .error.active {
+            display: block;
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .info-box h3 {
+            color: #1976D2;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .info-box ul {
+            margin-left: 20px;
+            color: #555;
+        }
+
+        .info-box li {
+            margin-bottom: 5px;
+        }
+
+        .footer {
+            text-align: center;
+            color: white;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .footer a {
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌞 Rooftop PV Detection System</h1>
+            <p class="subtitle">Governance-Ready Digital Verification Pipeline</p>
+            <p class="challenge">EcoInnovators Ideathon 2026 - PM Surya Ghar: Muft Bijli Yojana</p>
+        </div>
+
+        <div class="main-content">
+            <!-- Input Card -->
+            <div class="card">
+                <h2>📍 Location Verification</h2>
+                
+                <div class="info-box">
+                    <h3>How it works:</h3>
+                    <ul>
+                        <li>Enter coordinates of rooftop location</li>
+                        <li>System fetches satellite imagery (ArcGIS)</li>
+                        <li>AI model detects solar panels</li>
+                        <li>Applies 1200 sq.ft → 2400 sq.ft buffer logic</li>
+                        <li>Returns verification results + overlay</li>
+                    </ul>
+                </div>
+
+                <form id="verificationForm">
+                    <div class="form-group">
+                        <label for="sample_id">Sample ID</label>
+                        <input type="number" id="sample_id" name="sample_id" value="1001" required>
+                        <small>Unique identifier for this location</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="latitude">Latitude</label>
+                        <input type="number" id="latitude" name="latitude" step="0.000001" placeholder="e.g., 28.6139" required>
+                        <small>Decimal degrees (-90 to 90)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="longitude">Longitude</label>
+                        <input type="number" id="longitude" name="longitude" step="0.000001" placeholder="e.g., 77.2090" required>
+                        <small>Decimal degrees (-180 to 180)</small>
+                    </div>
+
+                    <button type="submit" class="btn" id="submitBtn">
+                        🚀 Run Verification
+                    </button>
+                </form>
+
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p><strong>Processing location...</strong></p>
+                    <p>Fetching imagery, running AI inference, and generating results.</p>
+                    <p><small>This may take 30-60 seconds.</small></p>
+                </div>
+
+                <div class="error" id="error"></div>
+            </div>
+
+            <!-- Results Card -->
+            <div class="card">
+                <h2>📊 Verification Results</h2>
+                
+                <div class="result" id="result">
+                    <div class="result-grid">
+                        <div class="result-item">
+                            <label>Sample ID</label>
+                            <value id="res_sample_id">-</value>
+                        </div>
+                        <div class="result-item">
+                            <label>Coordinates</label>
+                            <value id="res_coords">-</value>
+                        </div>
+                        <div class="result-item">
+                            <label>Solar Detected</label>
+                            <value id="res_has_solar">-</value>
+                        </div>
+                        <div class="result-item">
+                            <label>Confidence</label>
+                            <value id="res_confidence">-</value>
+                        </div>
+                        <div class="result-item">
+                            <label>Panel Area</label>
+                            <value id="res_area">-</value>
+                        </div>
+                        <div class="result-item">
+                            <label>Buffer Used</label>
+                            <value id="res_buffer">-</value>
+                        </div>
+                        <div class="result-item">
+                            <label>QC Status</label>
+                            <value id="res_qc">-</value>
+                        </div>
+                        <div class="result-item">
+                            <label>Processing Time</label>
+                            <value id="res_time">-</value>
+                        </div>
+                    </div>
+
+                    <div id="overlayContainer"></div>
+
+                    <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                        <label style="display: block; color: #666; font-size: 0.85em; font-weight: 600; margin-bottom: 10px;">FULL JSON OUTPUT</label>
+                        <pre id="jsonOutput" style="background: white; padding: 15px; border-radius: 5px; overflow-x: auto; font-size: 0.85em; border: 1px solid #e0e0e0;"></pre>
+                    </div>
+                </div>
+
+                <div style="padding: 30px; text-align: center; color: #999;" id="noResult">
+                    <p style="font-size: 3em; margin-bottom: 10px;">📋</p>
+                    <p><strong>No results yet</strong></p>
+                    <p>Enter coordinates and click "Run Verification" to begin.</p>
+                    
+                    <!-- Demo Visualization -->
+                    <div style="margin-top: 30px; padding: 20px; background: #f0f4ff; border-radius: 8px; text-align: left;">
+                        <h3 style="color: #1976D2; margin-bottom: 15px;">🎨 Demo: Visualization System</h3>
+                        <p style="color: #555; margin-bottom: 15px;">See how the overlay looks when solar panels are detected:</p>
+                        <div style="background: white; padding: 10px; border-radius: 8px;">
+                            <img src="/api/demo/overlay" alt="Demo Visualization" style="width: 100%; border-radius: 8px;" onerror="this.parentElement.innerHTML='<p style=\\'color: #999; padding: 20px; text-align: center;\\'>Demo image not available. Run test_visualization.py to generate demo overlays.</p>'">
+                        </div>
+                        <div style="margin-top: 15px; padding: 15px; background: white; border-radius: 8px; font-size: 0.9em;">
+                            <strong>Legend:</strong><br>
+                            <span style="color: #00ff00; font-weight: bold;">🟢 GREEN boxes</span> = Solar panels IN buffer zone<br>
+                            <span style="color: #ff0000; font-weight: bold;">🔴 RED boxes</span> = Solar panels OUTSIDE buffer zone<br>
+                            <span style="color: #ff8c00; font-weight: bold;">🟠 ORANGE circle</span> = Buffer zone 1 (1200 sq.ft)<br>
+                            <span style="color: #808080; font-weight: bold;">⚪ GRAY circle</span> = Buffer zone 2 (2400 sq.ft)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p><strong>EcoInnovators Ideathon 2026</strong></p>
+            <p>PM Surya Ghar: Muft Bijli Yojana - AI-Powered Rooftop PV Detection</p>
+            <p style="margin-top: 10px; font-size: 0.9em;">Imagery Source: <a href="https://services.arcgisonline.com" target="_blank">ArcGIS World_Imagery</a> (Free Public Endpoint)</p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';  // Same origin
+
+        document.getElementById('verificationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submitBtn');
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const result = document.getElementById('result');
+            const noResult = document.getElementById('noResult');
+
+            // Get form data
+            const data = {
+                sample_id: parseInt(document.getElementById('sample_id').value),
+                latitude: parseFloat(document.getElementById('latitude').value),
+                longitude: parseFloat(document.getElementById('longitude').value)
+            };
+
+            // Reset UI
+            submitBtn.disabled = true;
+            loading.classList.add('active');
+            error.classList.remove('active');
+            result.classList.remove('active');
+            noResult.style.display = 'block';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/verify/single`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Verification failed');
+                }
+
+                const resultData = await response.json();
+                displayResults(resultData);
+
+            } catch (err) {
+                console.error('Error:', err);
+                error.textContent = `❌ Error: ${err.message}`;
+                error.classList.add('active');
+            } finally {
+                submitBtn.disabled = false;
+                loading.classList.remove('active');
+            }
+        });
+
+        function displayResults(data) {
+            const result = document.getElementById('result');
+            const noResult = document.getElementById('noResult');
+
+            // Update result fields
+            document.getElementById('res_sample_id').textContent = data.sample_id;
+            document.getElementById('res_coords').textContent = `${data.lat.toFixed(4)}, ${data.lon.toFixed(4)}`;
+            
+            // Has solar badge
+            const hasSolarBadge = `<span class="status-badge ${data.has_solar ? 'has-solar-yes' : 'has-solar-no'}">${data.has_solar ? '✓ YES' : '✗ NO'}</span>`;
+            document.getElementById('res_has_solar').innerHTML = hasSolarBadge;
+            
+            document.getElementById('res_confidence').textContent = (data.confidence * 100).toFixed(1) + '%';
+            document.getElementById('res_area').textContent = data.pv_area_sqm_est.toFixed(2) + ' m²';
+            document.getElementById('res_buffer').textContent = data.buffer_radius_sqft + ' sq.ft';
+            
+            // QC status badge
+            const qcBadge = `<span class="status-badge ${data.qc_status === 'VERIFIABLE' ? 'status-verifiable' : 'status-not-verifiable'}">${data.qc_status}</span>`;
+            document.getElementById('res_qc').innerHTML = qcBadge;
+            
+            document.getElementById('res_time').textContent = data.processing_time_seconds + 's';
+
+            // Display overlay if available
+            const overlayContainer = document.getElementById('overlayContainer');
+            if (data.overlay_url) {
+                overlayContainer.innerHTML = `
+                    <div style="margin-top: 20px;">
+                        <label style="display: block; color: #666; font-size: 0.85em; font-weight: 600; margin-bottom: 10px; text-transform: uppercase;">Visual Overlay</label>
+                        <img src="${data.overlay_url}" class="overlay-image" alt="Detection Overlay" onerror="this.parentElement.innerHTML='<div style=\\'background: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; margin-top: 20px;\\'>⚠️ Overlay image not available</div>'">
+                    </div>
+                `;
+            } else if (data.qc_status === 'NOT_VERIFIABLE') {
+                overlayContainer.innerHTML = `
+                    <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #f5c6cb;">
+                        <strong>⚠️ No Overlay Available</strong><br>
+                        <small>Satellite imagery could not be fetched from ArcGIS API. This may be due to:<br>
+                        • Network timeout (slow connection)<br>
+                        • ArcGIS server temporarily unavailable<br>
+                        • Invalid coordinates<br><br>
+                        The system tried 3 times with 60-second timeout each. Please try again later or check your internet connection.</small>
+                    </div>
+                `;
+            } else {
+                overlayContainer.innerHTML = '';
+            }
+
+            // Display full JSON
+            const jsonOutput = document.getElementById('jsonOutput');
+            jsonOutput.textContent = JSON.stringify(data, null, 2);
+
+            // Show result, hide placeholder
+            result.classList.add('active');
+            noResult.style.display = 'none';
+        }
+    </script>
+</body>
+</html>

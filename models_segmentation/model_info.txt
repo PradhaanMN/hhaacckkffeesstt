@@ -1,36 +1,62 @@
-SOLAR PANEL SEGMENTATION MODEL v1.0
+SOLAR PANEL SEGMENTATION - 3-MODEL ENSEMBLE
 ======================================================================
 
-Model Name: solarpanel_seg_v1.pt
-Architecture: YOLOv8s-seg Ensemble (11.79M parameters)
-Total Training Images: 1638
-Total Annotations: 13933
+Ensemble Strategy: Equal weighting combining multiple trained models
+Total Models: 3 models trained separately and combined
 
-MODELS IN ENSEMBLE:
+MODEL DEVELOPMENT PROCESS:
 ----------------------------------------------------------------------
-1. Nano (3.26M params)
-   Performance: 81.8% mAP
-   Weight: 25.0%
-   Path: models_segmentation\best_final_combined.pt
+We trained multiple YOLOv8 models on different datasets and then 
+combined them all into an ensemble for better performance:
 
-2. Small-Single (11.79M params)
-   Performance: ~85% mAP
-   Weight: 35.0%
-   Path: results\solar_panel_yolov8s\weights\best.pt
+1. Model from Laptop (Primary)
+   - Architecture: YOLOv8s-seg (detection + segmentation)
+   - Performance: 94.3% mAP@0.5
+   - Size: 22.76 MB
+   - Training: Combined datasets approach
+   - Capabilities: Both bounding boxes and segmentation masks
 
-3. Small-Combined (11.79M params)
-   Performance: 94.3% mAP
-   Weight: 40.0%
-   Path: results\all_combined_yolov8s\weights\best.pt
+2. Ensemble Model v2
+   - Architecture: YOLOv8s-seg (detection + segmentation)
+   - Training: Custom workflow dataset
+   - Size: 22.52 MB
+   - Capabilities: Both bounding boxes and segmentation masks
+   - Path: model/ensemble_models/solarpanel_seg_v2.pt
 
-PRIMARY MODEL:
+3. Ensemble Model v3 (Large Dataset)
+   - Architecture: YOLOv8s-seg (detection + segmentation)
+   - Training: ~26,000 images (largest dataset)
+   - Size: 23.86 MB
+   - Capabilities: Both bounding boxes and segmentation masks
+   - Path: model/ensemble_models/solarpanel_seg_v3.pt
+
+ENSEMBLE CONFIGURATION:
 ----------------------------------------------------------------------
-Model: Small-Combined (11.79M params)
-Performance: 94.3% mAP
-Saved as: models_segmentation\solarpanel_seg_v1.pt
+All 3 models contribute equally (33.3% weight each)
+All models are YOLOv8s-seg: Support both detection and segmentation
+Total ensemble size: ~69 MB (all 3 models)
+Inference: Runs all 3 models and merges predictions
+Merging: NMS-based with equal confidence averaging for both boxes and masks
+
+PERFORMANCE:
+----------------------------------------------------------------------
+Single Model (Laptop): 94.3% mAP@0.5
+Ensemble (3 Models): Enhanced robustness and coverage
+Inference Speed: ~30-40ms per image (3 models)
 
 USAGE:
 ----------------------------------------------------------------------
-from ultralytics import YOLO
-model = YOLO('models_segmentation/solarpanel_seg_v1.pt')
-results = model.predict('image.jpg', conf=0.25)
+from model.model_inference import SolarPanelDetector
+
+# Ensemble automatically loads all 3 models
+detector = SolarPanelDetector(
+    "model/model_weights/solarpanel_seg_v1.pt",
+    ensemble_models=[
+        "model/ensemble_models/solarpanel_seg_v2.pt",
+        "model/ensemble_models/solarpanel_seg_v3.pt"
+    ]
+)
+
+results = detector.run_inference("image.jpg", conf=0.25)
+
+# All 3 models contribute equally to final predictions
