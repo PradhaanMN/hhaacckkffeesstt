@@ -1,0 +1,27 @@
+Python Version Information
+===========================
+
+Required Python Version: 3.10 or higher
+Tested Python Versions: 3.10, 3.11, 3.13
+
+Current System Python: 3.13.9
+
+Installation Instructions:
+--------------------------
+1. Download Python from: https://www.python.org/downloads/
+2. Ensure Python 3.10+ is installed
+3. Verify with: python --version
+
+Compatibility Notes:
+--------------------
+- Minimum: Python 3.10
+- Recommended: Python 3.10 or 3.11
+- Maximum tested: Python 3.13.9
+- PyTorch compatibility: Requires Python 3.8-3.13
+- YOLOv8 (Ultralytics): Requires Python 3.8+
+
+Platform Support:
+-----------------
+- Windows 10/11: ✓ Tested and working
+- Linux: ✓ Compatible
+- macOS: ✓ Compatible

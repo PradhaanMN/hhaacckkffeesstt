@@ -61,7 +61,7 @@ class SolarPanelDetector:
     def run_inference(
         self,
         image_path: str,
-        conf_threshold: float = 0.25,
+        conf_threshold: float = 0.30,
         iou_threshold: float = 0.45
     ) -> List[Dict]:
         """
