@@ -73,17 +73,21 @@ def get_model():
     if model_instance is None:
         logger.info("Loading YOLOv8 ensemble model...")
         
-        # Define all ensemble models (3 models combined)
+        # Get the main project root
+        main_root = Path(__file__).parent.parent.parent
+        
+        # Define all ensemble models (3 segmentation + 1 detection)
         ensemble_models = [
-            "model/ensemble_models/solarpanel_seg_v2.pt",
-            "model/ensemble_models/solarpanel_seg_v3.pt"
+            str(main_root / "trained_model_files" / "solarpanel_seg_v2.pt"),
+            str(main_root / "trained_model_files" / "solarpanel_seg_v3.pt"),
+            str(main_root / "trained_model_files" / "solarpanel_det_v4.pt")  # Detection-only model
         ]
         
         # Check which models exist
         available_models = [m for m in ensemble_models if Path(m).exists()]
         
         if available_models:
-            logger.info(f"Found {len(available_models)} additional ensemble models")
+            logger.info(f"Found {len(available_models)} additional ensemble models (segmentation + detection)")
         
         # Initialize detector with ensemble
         model_instance = SolarPanelDetector(
@@ -107,6 +111,14 @@ class BatchLocationRequest(BaseModel):
     locations: List[LocationRequest] = Field(..., description="List of locations to process")
 
 
+class PowerEstimate(BaseModel):
+    """Power generation estimate"""
+    peak_power_kw: float
+    daily_energy_kwh: float
+    monthly_energy_kwh: float
+    yearly_energy_kwh: float
+
+
 class VerificationResponse(BaseModel):
     """Verification result for a single location"""
     sample_id: int
@@ -118,6 +130,7 @@ class VerificationResponse(BaseModel):
     buffer_radius_sqft: int
     qc_status: str
     bbox_or_mask: str
+    power_estimate: PowerEstimate
     image_metadata: dict
     overlay_url: Optional[str] = None
     processing_time_seconds: Optional[float] = None
@@ -197,6 +210,7 @@ async def verify_single_location(request: LocationRequest):
             has_solar=result["has_solar"],
             confidence=result["confidence"],
             pv_area_sqm_est=result["pv_area_sqm_est"],
+            euclidean_distance_m_est=result["euclidean_distance_m_est"],
             buffer_radius_sqft=result["buffer_radius_sqft"],
             qc_status=result["qc_status"],
             bbox_or_mask=result["bbox_or_mask"],
@@ -222,6 +236,12 @@ async def verify_single_location(request: LocationRequest):
             buffer_radius_sqft=result["buffer_radius_sqft"],
             qc_status=result["qc_status"],
             bbox_or_mask=result["bbox_or_mask"],
+            power_estimate=result.get("power_estimate", {
+                "peak_power_kw": 0.0,
+                "daily_energy_kwh": 0.0,
+                "monthly_energy_kwh": 0.0,
+                "yearly_energy_kwh": 0.0
+            }),
             image_metadata=result["image_metadata"],
             overlay_url=overlay_url,
             processing_time_seconds=round(processing_time, 2)

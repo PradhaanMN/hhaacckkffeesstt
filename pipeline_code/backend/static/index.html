@@ -70,6 +70,10 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
 
+        .card.results-card {
+            min-height: 600px;
+        }
+
         .card h2 {
             color: #333;
             margin-bottom: 20px;
@@ -230,14 +234,30 @@
             color: #856404;
         }
 
+        .overlay-container {
+            max-width: 640px;
+            margin: 20px auto 0 auto;
+        }
+
         .overlay-image {
             width: 100%;
-            max-width: 640px;
             height: auto;
             border-radius: 8px;
-            margin: 20px auto 0 auto;
             display: block;
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .image-placeholder {
+            width: 100%;
+            max-width: 640px;
+            aspect-ratio: 1;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px auto 0 auto;
+            border: 2px dashed #e0e0e0;
         }
 
         .error {
@@ -308,7 +328,7 @@
                     <h3>How it works:</h3>
                     <ul>
                         <li>Enter coordinates of rooftop location</li>
-                        <li>System fetches satellite imagery (ArcGIS)</li>
+                        <li>System fetches satellite imagery</li>
                         <li>AI model detects solar panels</li>
                         <li>Applies 1200 sq.ft → 2400 sq.ft buffer logic</li>
                         <li>Returns verification results + overlay</li>
@@ -316,12 +336,6 @@
                 </div>
 
                 <form id="verificationForm">
-                    <div class="form-group">
-                        <label for="sample_id">Sample ID</label>
-                        <input type="number" id="sample_id" name="sample_id" value="1001" required>
-                        <small>Unique identifier for this location</small>
-                    </div>
-
                     <div class="form-group">
                         <label for="latitude">Latitude</label>
                         <input type="number" id="latitude" name="latitude" step="any" placeholder="e.g., 28.6139" required>
@@ -350,15 +364,11 @@
             </div>
 
             <!-- Results Card -->
-            <div class="card">
+            <div class="card results-card">
                 <h2>📊 Verification Results</h2>
                 
                 <div class="result" id="result">
                     <div class="result-grid">
-                        <div class="result-item">
-                            <label>Sample ID</label>
-                            <value id="res_sample_id">-</value>
-                        </div>
                         <div class="result-item">
                             <label>Coordinates</label>
                             <value id="res_coords">-</value>
@@ -389,6 +399,32 @@
                         </div>
                     </div>
 
+                    <!-- Power Generation Estimates -->
+                    <div id="powerEstimateSection" style="display: none; margin-top: 20px; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; color: white;">
+                        <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1.2em;">⚡ Power Generation Estimate</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 0.85em; opacity: 0.9; margin-bottom: 5px;">Peak Capacity</div>
+                                <div style="font-size: 1.5em; font-weight: bold;" id="power_peak">-</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 0.85em; opacity: 0.9; margin-bottom: 5px;">Daily Generation</div>
+                                <div style="font-size: 1.5em; font-weight: bold;" id="power_daily">-</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 0.85em; opacity: 0.9; margin-bottom: 5px;">Monthly Generation</div>
+                                <div style="font-size: 1.5em; font-weight: bold;" id="power_monthly">-</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 0.85em; opacity: 0.9; margin-bottom: 5px;">Yearly Generation</div>
+                                <div style="font-size: 1.5em; font-weight: bold;" id="power_yearly">-</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 15px; font-size: 0.85em; opacity: 0.9; text-align: center;">
+                            Estimates based on 18% panel efficiency, 5.5 peak sun hours/day, 80% system efficiency
+                        </div>
+                    </div>
+
                     <div id="overlayContainer"></div>
 
                     <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
@@ -401,22 +437,6 @@
                     <p style="font-size: 3em; margin-bottom: 10px;">📋</p>
                     <p><strong>No results yet</strong></p>
                     <p>Enter coordinates and click "Run Verification" to begin.</p>
-                    
-                    <!-- Demo Visualization -->
-                    <div style="margin-top: 30px; padding: 20px; background: #f0f4ff; border-radius: 8px; text-align: left;">
-                        <h3 style="color: #1976D2; margin-bottom: 15px;">🎨 Demo: Visualization System</h3>
-                        <p style="color: #555; margin-bottom: 15px;">See how the overlay looks when solar panels are detected:</p>
-                        <div style="background: white; padding: 10px; border-radius: 8px;">
-                            <img src="/api/demo/overlay" alt="Demo Visualization" style="width: 100%; border-radius: 8px;" onerror="this.parentElement.innerHTML='<p style=\\'color: #999; padding: 20px; text-align: center;\\'>Demo image not available. Run test_visualization.py to generate demo overlays.</p>'">
-                        </div>
-                        <div style="margin-top: 15px; padding: 15px; background: white; border-radius: 8px; font-size: 0.9em;">
-                            <strong>Legend:</strong><br>
-                            <span style="color: #00ff00; font-weight: bold;">🟢 GREEN boxes</span> = Solar panels IN buffer zone<br>
-                            <span style="color: #ff0000; font-weight: bold;">🔴 RED boxes</span> = Solar panels OUTSIDE buffer zone<br>
-                            <span style="color: #ff8c00; font-weight: bold;">🟠 ORANGE circle</span> = Buffer zone 1 (1200 sq.ft)<br>
-                            <span style="color: #808080; font-weight: bold;">⚪ GRAY circle</span> = Buffer zone 2 (2400 sq.ft)
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -424,7 +444,6 @@
         <div class="footer">
             <p><strong>EcoInnovators Ideathon 2026</strong></p>
             <p>PM Surya Ghar: Muft Bijli Yojana - AI-Powered Rooftop PV Detection</p>
-            <p style="margin-top: 10px; font-size: 0.9em;">Imagery Source: <a href="https://services.arcgisonline.com" target="_blank">ArcGIS World_Imagery</a> (Free Public Endpoint)</p>
         </div>
     </div>
 
@@ -442,7 +461,7 @@
 
             // Get form data
             const data = {
-                sample_id: parseInt(document.getElementById('sample_id').value),
+                sample_id: Date.now(),  // Auto-generate using timestamp
                 latitude: parseFloat(document.getElementById('latitude').value),
                 longitude: parseFloat(document.getElementById('longitude').value)
             };
@@ -486,7 +505,6 @@
             const noResult = document.getElementById('noResult');
 
             // Update result fields
-            document.getElementById('res_sample_id').textContent = data.sample_id;
             document.getElementById('res_coords').textContent = `${data.lat.toFixed(4)}, ${data.lon.toFixed(4)}`;
             
             // Has solar badge
@@ -503,22 +521,36 @@
             
             document.getElementById('res_time').textContent = data.processing_time_seconds + 's';
 
+            // Power generation estimates
+            const powerSection = document.getElementById('powerEstimateSection');
+            if (data.has_solar && data.power_estimate) {
+                document.getElementById('power_peak').textContent = data.power_estimate.peak_power_kw.toFixed(2) + ' kW';
+                document.getElementById('power_daily').textContent = data.power_estimate.daily_energy_kwh.toFixed(1) + ' kWh';
+                document.getElementById('power_monthly').textContent = data.power_estimate.monthly_energy_kwh.toFixed(0) + ' kWh';
+                document.getElementById('power_yearly').textContent = data.power_estimate.yearly_energy_kwh.toFixed(0) + ' kWh';
+                powerSection.style.display = 'block';
+            } else {
+                powerSection.style.display = 'none';
+            }
+
             // Display overlay if available
             const overlayContainer = document.getElementById('overlayContainer');
             if (data.overlay_url) {
                 overlayContainer.innerHTML = `
                     <div style="margin-top: 20px;">
                         <label style="display: block; color: #666; font-size: 0.85em; font-weight: 600; margin-bottom: 10px; text-transform: uppercase;">Visual Overlay</label>
-                        <img src="${data.overlay_url}" class="overlay-image" alt="Detection Overlay" onerror="this.parentElement.innerHTML='<div style=\\'background: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; margin-top: 20px;\\'>⚠️ Overlay image not available</div>'">
+                        <div class="overlay-container">
+                            <img src="${data.overlay_url}" class="overlay-image" alt="Detection Overlay" onerror="this.parentElement.innerHTML='<div style=\'background: #fff3cd; color: #856404; padding: 15px; border-radius: 8px;\'>⚠️ Overlay image not available</div>'">
+                        </div>
                     </div>
                 `;
             } else if (data.qc_status === 'NOT_VERIFIABLE') {
                 overlayContainer.innerHTML = `
                     <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #f5c6cb;">
                         <strong>⚠️ No Overlay Available</strong><br>
-                        <small>Satellite imagery could not be fetched from ArcGIS API. This may be due to:<br>
+                        <small>Satellite imagery could not be fetched. This may be due to:<br>
                         • Network timeout (slow connection)<br>
-                        • ArcGIS server temporarily unavailable<br>
+                        • Imagery service temporarily unavailable<br>
                         • Invalid coordinates<br><br>
                         The system tried 3 times with 60-second timeout each. Please try again later or check your internet connection.</small>
                     </div>

@@ -17,6 +17,7 @@ def write_prediction_json(
     has_solar: bool,
     confidence: float,
     pv_area_sqm_est: float,
+    euclidean_distance_m_est: float,
     buffer_radius_sqft: int,
     qc_status: str,
     bbox_or_mask: str,
@@ -34,6 +35,7 @@ def write_prediction_json(
       "has_solar": true,
       "confidence": 0.92,
       "pv_area_sqm_est": 23.5,
+      "euclidean_distance_m_est": 0.0,
       "buffer_radius_sqft": 1200,
       "qc_status": "VERIFIABLE",
       "bbox_or_mask": "<encoded polygon or bbox>",
@@ -47,6 +49,7 @@ def write_prediction_json(
         has_solar: Whether solar panels are present
         confidence: Model confidence score
         pv_area_sqm_est: Estimated PV area in square meters
+        euclidean_distance_m_est: Euclidean distance from center to panel (meters)
         buffer_radius_sqft: Buffer radius used (1200 or 2400)
         qc_status: "VERIFIABLE" or "NOT_VERIFIABLE"
         bbox_or_mask: Encoded polygon or bounding box
@@ -74,6 +77,7 @@ def write_prediction_json(
         "has_solar": bool(has_solar),
         "confidence": round(float(confidence), 4),
         "pv_area_sqm_est": round(float(pv_area_sqm_est), 2),
+        "euclidean_distance_m_est": round(float(euclidean_distance_m_est), 2),
         "buffer_radius_sqft": int(buffer_radius_sqft),
         "qc_status": str(qc_status),
         "bbox_or_mask": str(bbox_or_mask),

@@ -38,8 +38,26 @@ if exist pipeline_code\backend\main.py (
     exit /b 1
 )
 
+REM Check browser availability
+echo [2/3] Checking browser for satellite imagery...
+set BROWSER_FOUND=0
+
+where chrome.exe >nul 2>&1 && set BROWSER_FOUND=1 && echo [OK] Chrome available
+if %BROWSER_FOUND%==0 where msedge.exe >nul 2>&1 && set BROWSER_FOUND=1 && echo [OK] Microsoft Edge available
+if %BROWSER_FOUND%==0 where firefox.exe >nul 2>&1 && set BROWSER_FOUND=1 && echo [OK] Firefox available
+if %BROWSER_FOUND%==0 if exist "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" set BROWSER_FOUND=1 && echo [OK] Brave available
+if %BROWSER_FOUND%==0 where opera.exe >nul 2>&1 && set BROWSER_FOUND=1 && echo [OK] Opera available
+
+if %BROWSER_FOUND%==0 (
+    echo [WARNING] No browser detected!
+    echo The system needs Chrome, Edge, Firefox, Brave, or Opera to fetch satellite imagery.
+    echo Server will start, but imagery fetching may fail.
+    echo.
+)
+echo.
+
 REM Start the server
-echo [2/2] Starting FastAPI server...
+echo [3/3] Starting FastAPI server...
 echo.
 echo Server will be available at: http://localhost:8000
 echo.

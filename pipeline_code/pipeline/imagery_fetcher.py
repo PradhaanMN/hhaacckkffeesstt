@@ -12,6 +12,9 @@ from typing import Dict, Optional
 from PIL import Image
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.edge.options import Options as EdgeOptions
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
@@ -35,28 +38,44 @@ def get_browser_driver():
     """
     browsers = [
         ('Chrome', lambda: webdriver.Chrome(options=get_chrome_options())),
-        ('Edge', lambda: webdriver.Edge(options=get_edge_options())),
+        ('Microsoft Edge', lambda: webdriver.Edge(options=get_edge_options())),
         ('Firefox', lambda: webdriver.Firefox(options=get_firefox_options())),
         ('Brave', lambda: webdriver.Chrome(options=get_brave_options())),
         ('Opera', lambda: webdriver.Chrome(options=get_opera_options())),
     ]
     
+    logger.info("Detecting available browsers for satellite imagery capture...")
     last_error = None
+    
     for browser_name, get_driver in browsers:
         try:
-            logger.debug(f"Trying {browser_name} browser...")
+            logger.debug(f"Attempting to initialize {browser_name}...")
             driver = get_driver()
-            logger.info(f"✓ Using {browser_name} browser")
+            logger.info(f"✓ Successfully initialized {browser_name} browser")
             return driver
         except Exception as e:
             last_error = e
-            logger.debug(f"{browser_name} not available: {str(e)}")
+            logger.debug(f"✗ {browser_name} not available: {str(e)[:100]}")
             continue
     
-    raise RuntimeError(
-        f"No browser available. Install Chrome, Edge, Firefox, Brave, or Opera.\n"
-        f"Last error: {last_error}"
+    error_msg = (
+        "No compatible browser found!\n"
+        "\n"
+        "The system requires one of the following browsers:\n"
+        "  • Google Chrome (recommended)\n"
+        "  • Microsoft Edge\n"
+        "  • Mozilla Firefox\n"
+        "  • Brave Browser\n"
+        "  • Opera Browser\n"
+        "\n"
+        "Please install at least one browser and ensure it's accessible.\n"
+        f"\n"
+        f"Technical details: {str(last_error)[:200]}"
     )
+    
+    logger.error(error_msg)
+    raise RuntimeError(error_msg)
+
 
 
 def get_chrome_options():
@@ -70,6 +89,9 @@ def get_chrome_options():
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-extensions")
     chrome_options.add_argument("--log-level=3")
+    chrome_options.add_argument("--disable-cache")
+    chrome_options.add_argument("--disk-cache-size=0")
+    chrome_options.add_argument("--incognito")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
     return chrome_options
 
@@ -204,7 +226,7 @@ def fetch_google_maps_satellite(
         driver = get_browser_driver()
         
         # Construct Google Maps URL with satellite view and max zoom
-        # @satellite specifies satellite view, z=21 sets zoom level to maximum
+        # Note: Labels are embedded in Google's satellite tiles and cannot be easily removed
         maps_url = f"https://www.google.com/maps/@{lat},{lon},21z/data=!3m1!1e3"
         
         logger.debug(f"Loading Google Maps at zoom 21...")
@@ -229,11 +251,156 @@ def fetch_google_maps_satellite(
         
         if not map_loaded:
             logger.warning("Map loading timeout, continuing anyway...")
-            time.sleep(1)
+        
+        # Wait longer for everything to settle
+        logger.debug("Waiting for page to fully render...")
+        time.sleep(4)
+        
+        # Comprehensive label removal attempt
+        try:
+            logger.debug("Starting label removal process...")
+            
+            # Step 1: Click Layers button using multiple methods
+            layers_opened = False
+            
+            # Method A: Try XPath
+            try:
+                layers_btn = driver.find_element(By.XPATH, "//button[contains(@aria-label, 'Layer') or contains(@aria-label, 'layer')]")
+                layers_btn.click()
+                layers_opened = True
+                logger.debug("✓ Layers opened via XPath")
+            except:
+                pass
+            
+            # Method B: Try JavaScript with all buttons
+            if not layers_opened:
+                try:
+                    js_result = driver.execute_script("""
+                        var buttons = document.getElementsByTagName('button');
+                        for (var i = 0; i < buttons.length; i++) {
+                            var label = buttons[i].getAttribute('aria-label') || '';
+                            if (label.toLowerCase().includes('layer')) {
+                                buttons[i].click();
+                                return true;
+                            }
+                        }
+                        return false;
+                    """)
+                    if js_result:
+                        layers_opened = True
+                        logger.debug("✓ Layers opened via JavaScript")
+                except:
+                    pass
+            
+            if layers_opened:
+                time.sleep(2)  # Wait for menu animation
+                
+                # Step 2: Find and click the Labels checkbox
+                try:
+                    # Try XPath to find text "Labels" and nearby checkbox
+                    checkbox_result = driver.execute_script("""
+                        // Find all text nodes containing "Label"
+                        var walker = document.createTreeWalker(
+                            document.body,
+                            NodeFilter.SHOW_TEXT,
+                            null,
+                            false
+                        );
+                        
+                        var textNodes = [];
+                        while(walker.nextNode()) {
+                            if (walker.currentNode.nodeValue.match(/label/i)) {
+                                textNodes.push(walker.currentNode);
+                            }
+                        }
+                        
+                        // For each text node, find nearby checkbox
+                        for (var textNode of textNodes) {
+                            var parent = textNode.parentElement;
+                            if (!parent) continue;
+                            
+                            // Look for checkbox in parent or siblings
+                            var container = parent.closest('div');
+                            if (!container) continue;
+                            
+                            var checkbox = container.querySelector('input[type="checkbox"]');
+                            if (!checkbox) {
+                                checkbox = container.querySelector('[role="checkbox"]');
+                            }
+                            
+                            if (checkbox) {
+                                var isChecked = checkbox.checked || 
+                                               checkbox.getAttribute('aria-checked') === 'true';
+                                               
+                                if (isChecked) {
+                                    checkbox.click();
+                                    return 'clicked';
+                                } else {
+                                    return 'already_unchecked';
+                                }
+                            }
+                        }
+                        
+                        return 'not_found';
+                    """)
+                    
+                    logger.debug(f"Checkbox result: {checkbox_result}")
+                    
+                    if checkbox_result == 'clicked':
+                        logger.debug("✓ Successfully unchecked Labels!")
+                        time.sleep(3)  # Wait for map to reload without labels
+                    elif checkbox_result == 'already_unchecked':
+                        logger.debug("Labels already unchecked")
+                    else:
+                        logger.debug("Could not find Labels checkbox")
+                        
+                except Exception as e:
+                    logger.debug(f"Checkbox interaction failed: {e}")
+            else:
+                logger.debug("Could not open Layers menu")
+                
+        except Exception as e:
+            logger.debug(f"Label removal failed: {e}")
         
         # Wait for satellite tiles to load
+        time.sleep(1)
         logger.debug("Waiting for satellite imagery tiles...")
         time.sleep(0.5)
+        
+        # Disable labels using Google Maps URL parameter
+        try:
+            # Add URL parameter to disable labels
+            logger.debug("Disabling map labels...")
+            driver.execute_script("""
+                // Navigate to URL with labels disabled
+                var currentUrl = window.location.href;
+                if (!currentUrl.includes('!4m2!6m1!1s')) {
+                    window.location.href = currentUrl + '!4m2!6m1!1s';
+                }
+            """)
+            time.sleep(1)
+        except Exception as e:
+            logger.debug(f"URL method failed: {e}")
+        
+        # Hide map labels using CSS as fallback
+        try:
+            driver.execute_script("""
+                var style = document.createElement('style');
+                style.innerHTML = `
+                    /* Hide all text/label layers */
+                    div[style*="font-"] { display: none !important; }
+                    div[style*="text"] { display: none !important; }
+                    span[style*="font-"] { display: none !important; }
+                    /* Hide POI markers and labels */
+                    div[class*="widget"] { display: none !important; }
+                    div[class*="label"] { display: none !important; }
+                `;
+                document.head.appendChild(style);
+            """)
+            logger.debug("Applied CSS to hide labels")
+            time.sleep(0.3)
+        except Exception as e:
+            logger.warning(f"Could not hide labels: {e}")
         
         try:
             pending = driver.execute_script("""

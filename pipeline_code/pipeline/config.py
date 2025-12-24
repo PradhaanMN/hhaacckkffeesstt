@@ -8,6 +8,8 @@ from pathlib import Path
 
 # Project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.absolute()
+# Go up one more level to reach the main project root
+MAIN_PROJECT_ROOT = PROJECT_ROOT.parent
 
 # Input/Output directories
 INPUTS_DIR = PROJECT_ROOT / "inputs"
@@ -18,9 +20,8 @@ OUTPUT_PREDICTIONS_DIR = str(PREDICTIONS_DIR)  # String version for compatibilit
 OUTPUT_OVERLAYS_DIR = OVERLAYS_DIR  # Path object
 LOGS_DIR = PROJECT_ROOT / "logs"
 
-# Model directories
-MODEL_DIR = PROJECT_ROOT / "model"
-MODEL_WEIGHTS_DIR = MODEL_DIR / "model_weights"
+# Model directories - Point to actual trained model files location
+MODEL_WEIGHTS_DIR = MAIN_PROJECT_ROOT / "trained_model_files"
 MODEL_PATH = MODEL_WEIGHTS_DIR / "solarpanel_seg_v1.pt"
 MODEL_WEIGHTS_PATH = str(MODEL_PATH)  # String version for compatibility
 
@@ -60,9 +61,9 @@ RETRY_DELAY = 3  # seconds
 LOG_LEVEL = "INFO"
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
-# Overlay visualization settings
+# Overlay visualization settings (BGR format for OpenCV)
 OVERLAY_PANEL_COLOR = (0, 255, 0)  # Green for detected panels
-OVERLAY_BUFFER_COLOR = (255, 165, 0)  # Orange for buffer zone
+OVERLAY_BUFFER_COLOR = (255, 165, 0)  # Blue for buffer zone
 OVERLAY_SELECTED_COLOR = (255, 0, 0)  # Red for selected panel
 OVERLAY_LINE_THICKNESS = 2
 OVERLAY_ALPHA = 0.3  # Transparency for filled polygons

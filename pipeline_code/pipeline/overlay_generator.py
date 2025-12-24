@@ -7,6 +7,8 @@ import numpy as np
 import logging
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
+from shapely.geometry import Polygon, Point
+from shapely.ops import unary_union
 from .config import (
     OVERLAY_PANEL_COLOR,
     OVERLAY_BUFFER_COLOR,
@@ -116,6 +118,83 @@ def draw_polygon(
     return image
 
 
+def draw_split_polygon(
+    image: np.ndarray,
+    polygon: List[List[float]],
+    center: Tuple[int, int],
+    radius: float,
+    color_inside: Tuple[int, int, int],
+    color_outside: Tuple[int, int, int],
+    thickness: int = 2,
+    filled: bool = False,
+    alpha: float = 0.3
+) -> np.ndarray:
+    """
+    Draw a polygon split by a circular buffer zone.
+    Part inside buffer = one color, part outside = another color.
+    
+    Args:
+        image: Input image
+        polygon: List of [x, y] coordinates
+        center: (x, y) center of buffer circle
+        radius: Radius of buffer circle
+        color_inside: BGR color for part inside buffer (green)
+        color_outside: BGR color for part outside buffer (red)
+        thickness: Line thickness
+        filled: Whether to fill the polygons
+        alpha: Transparency for filled polygons
+        
+    Returns:
+        Modified image
+    """
+    if not polygon or len(polygon) < 3:
+        return image
+    
+    try:
+        # Create shapely polygon from detection
+        panel_poly = Polygon(polygon)
+        
+        # Create circular buffer zone
+        buffer_circle = Point(center[0], center[1]).buffer(radius)
+        
+        # Clip polygon: part inside buffer
+        inside_part = panel_poly.intersection(buffer_circle)
+        
+        # Clip polygon: part outside buffer
+        outside_part = panel_poly.difference(buffer_circle)
+        
+        # Draw inside part (GREEN)
+        if not inside_part.is_empty:
+            if inside_part.geom_type == 'Polygon':
+                coords = list(inside_part.exterior.coords)
+                draw_polygon(image, coords, color_inside, thickness, filled, alpha)
+            elif inside_part.geom_type == 'MultiPolygon':
+                for poly in inside_part.geoms:
+                    coords = list(poly.exterior.coords)
+                    draw_polygon(image, coords, color_inside, thickness, filled, alpha)
+        
+        # Draw outside part (RED)
+        if not outside_part.is_empty:
+            if outside_part.geom_type == 'Polygon':
+                coords = list(outside_part.exterior.coords)
+                draw_polygon(image, coords, color_outside, thickness, filled, alpha)
+            elif outside_part.geom_type == 'MultiPolygon':
+                for poly in outside_part.geoms:
+                    coords = list(poly.exterior.coords)
+                    draw_polygon(image, coords, color_outside, thickness, filled, alpha)
+    
+    except Exception as e:
+        logger.warning(f"Failed to split polygon: {e}. Drawing as single color.")
+        # Fallback: determine color by centroid
+        centroid_x = np.mean([p[0] for p in polygon])
+        centroid_y = np.mean([p[1] for p in polygon])
+        distance = np.sqrt((centroid_x - center[0])**2 + (centroid_y - center[1])**2)
+        color = color_inside if distance <= radius else color_outside
+        draw_polygon(image, polygon, color, thickness, filled, alpha)
+    
+    return image
+
+
 def draw_circle(
     image: np.ndarray,
     center: Tuple[int, int],
@@ -214,122 +293,138 @@ def create_overlay_image(
         
         logger.info(f"Buffer radii: 1200 sq.ft = {radius_1200}px, 2400 sq.ft = {radius_2400}px")
         
-        # Draw BOTH buffer zones on the image
-        # Buffer zone 2 (2400 sq.ft) - outer circle in GRAY
-        draw_circle(
-            image,
-            center,
-            int(radius_2400),
-            (128, 128, 128),  # Gray
-            thickness=2,
-            filled=False
-        )
-        
-        # Buffer zone 1 (1200 sq.ft) - inner circle in ORANGE
-        draw_circle(
-            image,
-            center,
-            int(radius_1200),
-            OVERLAY_BUFFER_COLOR,  # Orange
-            thickness=3,
-            filled=True,
-            alpha=0.1
-        )
-        
-        # Determine which radius to use for panel classification
+        # Determine which radius is active
         active_radius = radius_1200 if buffer_sqft == 1200 else radius_2400
         
-        # Count panels in each zone
-        panels_in_buffer = []
-        panels_outside_buffer = []
+        # Draw BOTH buffer zones on the image
+        # Buffer zone 2 (2400 sq.ft) - outer circle
+        if buffer_sqft == 2400:
+            # Active buffer - YELLOW with highlight
+            draw_circle(
+                image,
+                center,
+                int(radius_2400),
+                (0, 255, 255),  # Yellow (BGR)
+                thickness=4,
+                filled=True,
+                alpha=0.15
+            )
+        else:
+            # Inactive buffer - GRAY
+            draw_circle(
+                image,
+                center,
+                int(radius_2400),
+                (128, 128, 128),  # Gray
+                thickness=2,
+                filled=False
+            )
         
-        # Classify all detections
+        # Buffer zone 1 (1200 sq.ft) - inner circle
+        if buffer_sqft == 1200:
+            # Active buffer - YELLOW with highlight
+            draw_circle(
+                image,
+                center,
+                int(radius_1200),
+                (0, 255, 255),  # Yellow (BGR)
+                thickness=4,
+                filled=True,
+                alpha=0.15
+            )
+        else:
+            # Inactive buffer - BLUE (only if 2400 is active)
+            draw_circle(
+                image,
+                center,
+                int(radius_1200),
+                OVERLAY_BUFFER_COLOR,  # Blue
+                thickness=2,
+                filled=True,
+                alpha=0.1
+            )
+        
+        # Draw ALL detections with split coloring
+        # Green for part inside buffer, red for part outside
         for detection in detections:
             polygon = detection.get("polygon", [])
+            bbox = detection.get("bbox", [])
+            confidence = detection.get("confidence", 0)
+            
             if not polygon:
                 continue
-                
-            # Calculate centroid
+            
+            # Draw polygon split by buffer zone
+            # Green inside, Red outside
+            draw_split_polygon(
+                image,
+                polygon,
+                center,
+                active_radius,
+                color_inside=(0, 255, 0),   # Green (BGR)
+                color_outside=(0, 0, 255),  # Red (BGR)
+                thickness=2,
+                filled=True,
+                alpha=0.3
+            )
+            
+            # Draw bounding box
+            # Determine bbox color by centroid location
             centroid_x = np.mean([p[0] for p in polygon])
             centroid_y = np.mean([p[1] for p in polygon])
-            
-            # Check if centroid is in active buffer zone
             distance = np.sqrt((centroid_x - center[0])**2 + (centroid_y - center[1])**2)
             
             if distance <= active_radius:
-                panels_in_buffer.append(detection)
-            else:
-                panels_outside_buffer.append(detection)
-        
-        # Draw panels OUTSIDE buffer in RED
-        for detection in panels_outside_buffer:
-            polygon = detection.get("polygon", [])
-            bbox = detection.get("bbox", [])
-            confidence = detection.get("confidence", 0)
-            
-            # RED color for outside panels
-            color = (0, 0, 255)  # BGR: Red
-            
-            # Draw bounding box (RED)
-            if bbox and len(bbox) >= 4:
-                label = f"{confidence:.0%}"
-                draw_bbox(
-                    image,
-                    bbox,
-                    color,
-                    thickness=2,
-                    label=label
-                )
-        
-        # Draw panels IN buffer in GREEN
-        for detection in panels_in_buffer:
-            polygon = detection.get("polygon", [])
-            bbox = detection.get("bbox", [])
-            confidence = detection.get("confidence", 0)
-            
-            # GREEN color for inside panels
-            color = (0, 255, 0)  # BGR: Green
-            
-            # Draw bounding box (GREEN)
-            if bbox and len(bbox) >= 4:
+                # Mostly inside - green bbox
+                bbox_color = (0, 255, 0)  # Green
                 label = f"Solar {confidence:.0%}"
-                draw_bbox(
-                    image,
-                    bbox,
-                    color,
-                    thickness=3,
-                    label=label
-                )
+                thickness = 3
+            else:
+                # Mostly outside - red bbox
+                bbox_color = (0, 0, 255)  # Red
+                label = f"{confidence:.0%}"
+                thickness = 2
+            
+            if bbox and len(bbox) >= 4:
+                draw_bbox(image, bbox, bbox_color, thickness=thickness, label=label)
         
         # Add comprehensive legend with background
-        legend_height = 140
-        cv2.rectangle(image, (5, 5), (450, legend_height), (0, 0, 0), -1)
-        cv2.rectangle(image, (5, 5), (450, legend_height), (255, 255, 255), 2)
+        legend_height = 160
+        cv2.rectangle(image, (5, 5), (520, legend_height), (0, 0, 0), -1)
+        cv2.rectangle(image, (5, 5), (520, legend_height), (255, 255, 255), 2)
         
         legend_y = 25
-        cv2.putText(image, "GREEN BOXES: Panels IN buffer zone", (10, legend_y),
+        cv2.putText(image, "GREEN: Panel area INSIDE buffer zone", (10, legend_y),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         
         legend_y += 20
-        cv2.putText(image, "RED BOXES: Panels OUTSIDE buffer zone", (10, legend_y),
+        cv2.putText(image, "RED: Panel area OUTSIDE buffer zone", (10, legend_y),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
         
         legend_y += 20
-        cv2.putText(image, f"ORANGE CIRCLE: Buffer zone 1 (1200 sq.ft)", (10, legend_y),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, OVERLAY_BUFFER_COLOR, 2)
+        cv2.putText(image, "(Panels split by buffer boundary)", (10, legend_y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
         
         legend_y += 20
-        cv2.putText(image, f"GRAY CIRCLE: Buffer zone 2 (2400 sq.ft)", (10, legend_y),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (128, 128, 128), 2)
+        cv2.putText(image, f"YELLOW CIRCLE: Active buffer ({buffer_sqft} sq.ft)", (10, legend_y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
         
         legend_y += 20
-        buffer_text = f"Active buffer: {buffer_sqft} sq.ft" if buffer_sqft else "Buffer: Unknown"
-        cv2.putText(image, buffer_text, (10, legend_y),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        inactive_buffer = "2400" if buffer_sqft == 1200 else "1200"
+        inactive_color = (128, 128, 128) if buffer_sqft == 1200 else OVERLAY_BUFFER_COLOR
+        inactive_label = "GRAY" if buffer_sqft == 1200 else "BLUE"
+        cv2.putText(image, f"{inactive_label} CIRCLE: Inactive buffer ({inactive_buffer} sq.ft)", (10, legend_y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, inactive_color, 2)
+        
+        # Count panels by centroid location for display
+        panels_in = sum(1 for d in detections if d.get("polygon") and 
+                       np.sqrt((np.mean([p[0] for p in d["polygon"]]) - center[0])**2 + 
+                              (np.mean([p[1] for p in d["polygon"]]) - center[1])**2) <= active_radius)
+        panels_out = len(detections) - panels_in
         
         # Add detection counts
         legend_y += 20
-        count_text = f"In buffer: {len(panels_in_buffer)} | Outside: {len(panels_outside_buffer)}"
+        count_text = f"In buffer: {panels_in} | Outside: {panels_out}"
         cv2.putText(image, count_text, (10, legend_y),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
         

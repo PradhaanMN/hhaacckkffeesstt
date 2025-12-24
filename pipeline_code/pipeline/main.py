@@ -43,6 +43,7 @@ def find_panels_in_buffer(
 ) -> List[Dict]:
     """
     Find which detected panels overlap with the buffer zone.
+    Uses shapely for accurate geometric intersection detection.
     
     Args:
         detections: List of detection dictionaries
@@ -52,20 +53,35 @@ def find_panels_in_buffer(
     Returns:
         List of detections that overlap with buffer
     """
+    from shapely.geometry import Polygon, Point
+    
     panels_in_buffer = []
     
+    # Create buffer circle geometry
+    buffer_circle = Point(buffer_center_px[0], buffer_center_px[1]).buffer(buffer_radius_px)
+    
     for det in detections:
-        polygon = det["polygon"]
+        polygon = det.get("polygon", [])
+        if len(polygon) < 3:
+            continue
         
-        # Check if any point of the polygon is inside the buffer circle
-        for point in polygon:
-            dx = point[0] - buffer_center_px[0]
-            dy = point[1] - buffer_center_px[1]
-            distance = (dx**2 + dy**2) ** 0.5
+        try:
+            # Create shapely polygon from detection
+            panel_poly = Polygon(polygon)
             
-            if distance <= buffer_radius_px:
+            # Check if panel intersects buffer (any overlap counts)
+            if buffer_circle.intersects(panel_poly):
                 panels_in_buffer.append(det)
-                break
+        except Exception as e:
+            # Fallback: check if any point is inside buffer
+            for point in polygon:
+                dx = point[0] - buffer_center_px[0]
+                dy = point[1] - buffer_center_px[1]
+                distance = (dx**2 + dy**2) ** 0.5
+                
+                if distance <= buffer_radius_px:
+                    panels_in_buffer.append(det)
+                    break
     
     return panels_in_buffer
 
@@ -96,6 +112,78 @@ def select_largest_panel_in_buffer(
     largest_panel = max(panels_in_buffer, key=lambda d: d["area_px"])
     
     return largest_panel
+
+
+def calculate_euclidean_distance(
+    panel_polygon: List,
+    center_px: tuple,
+    meters_per_pixel_x: float,
+    meters_per_pixel_y: float
+) -> float:
+    """
+    Calculate Euclidean distance from image center to panel centroid in meters.
+    
+    Args:
+        panel_polygon: List of [x, y] coordinates
+        center_px: (x, y) center of image in pixels
+        meters_per_pixel_x: Ground resolution in X
+        meters_per_pixel_y: Ground resolution in Y
+        
+    Returns:
+        Distance in meters
+    """
+    import numpy as np
+    
+    # Calculate panel centroid
+    polygon_array = np.array(panel_polygon)
+    centroid_x = np.mean(polygon_array[:, 0])
+    centroid_y = np.mean(polygon_array[:, 1])
+    
+    # Distance in pixels
+    dx_px = centroid_x - center_px[0]
+    dy_px = centroid_y - center_px[1]
+    
+    # Convert to meters
+    dx_m = dx_px * meters_per_pixel_x
+    dy_m = dy_px * meters_per_pixel_y
+    
+    # Euclidean distance
+    distance_m = np.sqrt(dx_m**2 + dy_m**2)
+    
+    return distance_m
+
+
+def estimate_power_generation(area_sqm: float) -> dict:
+    """
+    Estimate power generation capacity from solar panel area.
+    
+    Args:
+        area_sqm: Panel area in square meters
+        
+    Returns:
+        Dictionary with power estimates
+    """
+    # Solar panel efficiency assumptions for India
+    PANEL_EFFICIENCY = 0.18  # 18% (modern panels: 15-20%)
+    PEAK_SUN_HOURS = 5.5     # Average for India (5-6 hours/day)
+    SYSTEM_EFFICIENCY = 0.80  # 80% (losses: inverter, wiring, dust, temperature)
+    
+    # Peak power capacity (kW) = Area × Efficiency × 1 kW/m² (standard test)
+    peak_power_kw = area_sqm * PANEL_EFFICIENCY
+    
+    # Daily energy generation (kWh/day)
+    daily_energy_kwh = peak_power_kw * PEAK_SUN_HOURS * SYSTEM_EFFICIENCY
+    
+    # Monthly and yearly estimates
+    monthly_energy_kwh = daily_energy_kwh * 30
+    yearly_energy_kwh = daily_energy_kwh * 365
+    
+    return {
+        "peak_power_kw": round(peak_power_kw, 2),
+        "daily_energy_kwh": round(daily_energy_kwh, 2),
+        "monthly_energy_kwh": round(monthly_energy_kwh, 2),
+        "yearly_energy_kwh": round(yearly_energy_kwh, 2)
+    }
 
 
 def convert_pixel_area_to_sqm(
@@ -164,6 +252,12 @@ def process_single_location(
     
     if not fetch_result["success"]:
         logger.warning(f"Failed to fetch imagery: {fetch_result.get('error')}")
+        # Clean up any partial temp file
+        try:
+            if temp_image_path.exists():
+                temp_image_path.unlink()
+        except Exception:
+            pass
         # Return NOT_VERIFIABLE result
         return {
             "sample_id": sample_id,
@@ -225,7 +319,7 @@ def process_single_location(
     has_solar = selected_panel is not None
     confidence = selected_panel["confidence"] if has_solar else 0.0
     
-    # Calculate area in square meters
+    # Calculate area in square meters and euclidean distance
     if has_solar:
         area_sqm = convert_pixel_area_to_sqm(
             selected_panel["area_px"],
@@ -233,9 +327,16 @@ def process_single_location(
             fetch_result["meters_per_pixel_y"]
         )
         bbox_or_mask = encode_polygon_for_json(selected_panel["polygon"])
+        euclidean_distance_m = calculate_euclidean_distance(
+            selected_panel["polygon"],
+            center_px,
+            fetch_result["meters_per_pixel_x"],
+            fetch_result["meters_per_pixel_y"]
+        )
     else:
         area_sqm = 0.0
         bbox_or_mask = ""
+        euclidean_distance_m = 0.0
     
     # Determine QC status
     image_quality = check_image_quality(str(temp_image_path)) if fetch_result["success"] else None
@@ -258,6 +359,14 @@ def process_single_location(
         imagery_sqft=IMAGERY_FETCH_SIZE_SQFT  # Total imagery area
     )
     
+    # Estimate power generation if solar detected
+    power_estimate = estimate_power_generation(area_sqm) if has_solar else {
+        "peak_power_kw": 0.0,
+        "daily_energy_kwh": 0.0,
+        "monthly_energy_kwh": 0.0,
+        "yearly_energy_kwh": 0.0
+    }
+    
     # Build prediction
     prediction = {
         "sample_id": sample_id,
@@ -266,9 +375,11 @@ def process_single_location(
         "has_solar": has_solar,
         "confidence": confidence,
         "pv_area_sqm_est": area_sqm,
+        "euclidean_distance_m_est": euclidean_distance_m,
         "buffer_radius_sqft": buffer_zone,
         "qc_status": qc_status,
         "bbox_or_mask": bbox_or_mask,
+        "power_estimate": power_estimate,
         "image_metadata": {
             "source": "ArcGIS World_Imagery",
             "capture_date": "UNKNOWN"
@@ -277,6 +388,14 @@ def process_single_location(
     
     logger.info(f"Sample {sample_id}: has_solar={has_solar}, confidence={confidence:.2f}, "
                 f"area={area_sqm:.2f} m², QC={qc_status}")
+    
+    # Clean up temporary image file
+    try:
+        if temp_image_path.exists():
+            temp_image_path.unlink()
+            logger.debug(f"Deleted temporary image: {temp_image_path}")
+    except Exception as e:
+        logger.warning(f"Failed to delete temporary image {temp_image_path}: {e}")
     
     return prediction
 

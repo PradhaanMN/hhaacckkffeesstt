@@ -72,6 +72,56 @@ python -m pip install --upgrade pip --quiet
 pip install -r requirements.txt
 
 echo.
+echo [5/5] Checking browser availability...
+echo.
+
+REM Check for Chrome
+where chrome.exe >nul 2>&1
+if %errorlevel%==0 (
+    echo [OK] Chrome detected
+) else (
+    echo [INFO] Chrome not found in PATH
+)
+
+REM Check for Edge
+where msedge.exe >nul 2>&1
+if %errorlevel%==0 (
+    echo [OK] Microsoft Edge detected
+) else (
+    echo [INFO] Edge not found in PATH
+)
+
+REM Check for Firefox
+where firefox.exe >nul 2>&1
+if %errorlevel%==0 (
+    echo [OK] Firefox detected
+) else (
+    echo [INFO] Firefox not found in PATH
+)
+
+REM Check for Opera
+where opera.exe >nul 2>&1
+if %errorlevel%==0 (
+    echo [OK] Opera detected
+) else (
+    echo [INFO] Opera not found in PATH
+)
+
+REM Check for Brave (common locations)
+if exist "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" (
+    echo [OK] Brave detected
+) else if exist "C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe" (
+    echo [OK] Brave detected
+) else (
+    echo [INFO] Brave not found
+)
+
+echo.
+echo NOTE: The system will automatically use any available browser.
+echo      (Chrome, Edge, Firefox, Brave, or Opera in that order)
+echo.
+
+echo.
 echo ================================================================================
 echo   SETUP COMPLETE!
 echo ================================================================================
@@ -84,11 +134,7 @@ echo.
 echo 1. To start the web server, run:
 echo    start_server.bat
 echo.
-echo 2. Or manually:
-echo    .venv\Scripts\activate
-echo    python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
-echo.
-echo 3. Then open your browser at:
+echo 2. Then open your browser at:
 echo    http://localhost:8000
 echo.
 echo ================================================================================

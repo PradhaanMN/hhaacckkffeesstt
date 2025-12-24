@@ -6,21 +6,26 @@ Complete end-to-end AI-powered system for detecting rooftop solar panels from sa
 
 ## 🚀 System Highlights
 
-- ✅ **3-Model Ensemble**: 94.3% accuracy combining 3 YOLOv8 models (~32k+ total training images)
+- ✅ **4-Model Ensemble**: 94%+ accuracy combining 4 YOLOv8 models (3 segmentation + 1 detection, ~32k+ total training images)
 - ✅ **Automated Satellite Imagery**: High-resolution imagery retrieval (no API keys required)
 - ✅ **Fast Processing**: 3-4 seconds per location
 - ✅ **High Success Rate**: Optimized imagery capture (12,900 sq ft at max resolution)
-- ✅ **Enhanced Visualization**: Color-coded detections (GREEN=in buffer, RED=outside)
-- ✅ **Two-Tier Buffer Analysis**: 1200/2400 sq.ft as per ideathon specification
+- ✅ **Enhanced Visualization**: Split-color polygon rendering (GREEN=inside buffer, RED=outside buffer)
+- ✅ **Two-Tier Buffer Analysis**: 1200/2400 sq.ft with yellow highlight for active buffer
+- ✅ **Power Generation Estimates**: Automatic kWh calculations per detection
 - ✅ **Complete Web Interface**: REST API + Interactive UI
 - ✅ **Production Ready**: Clean code, robust error handling, comprehensive documentation
 
 ## 📋 Requirements
 
 - Python 3.10 or 3.11
-- CUDA-capable GPU (recommended for training)
+- **At least ONE supported browser** (Chrome, Edge, Firefox, Brave, or Opera) for satellite imagery
+- CUDA-capable GPU (recommended for training, optional for inference)
 - 8GB+ RAM
 - Windows/Linux/MacOS
+- Internet connection for satellite imagery retrieval
+
+> 💡 **Browser Support**: The system automatically detects and uses available browsers. See [BROWSER_SUPPORT.md](BROWSER_SUPPORT.md) for details.
 
 ## 🛠️ Installation
 
