@@ -69,7 +69,7 @@ echo.
 REM Install requirements
 echo [4/4] Installing dependencies (this may take 3-5 minutes)...
 python -m pip install --upgrade pip --quiet
-pip install -r requirements.txt
+pip install -r environment_details\requirements.txt
 
 echo.
 echo [5/5] Checking browser availability...
@@ -116,9 +116,27 @@ if exist "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" (
     echo [INFO] Brave not found
 )
 
+REM Check for Vivaldi (common locations)
+if exist "C:\Program Files\Vivaldi\Application\vivaldi.exe" (
+    echo [OK] Vivaldi detected
+) else if exist "C:\Program Files (x86)\Vivaldi\Application\vivaldi.exe" (
+    echo [OK] Vivaldi detected
+) else (
+    echo [INFO] Vivaldi not found
+)
+
+REM Check for Chromium (common locations)
+if exist "C:\Program Files\Chromium\Application\chrome.exe" (
+    echo [OK] Chromium detected
+) else if exist "C:\Program Files (x86)\Chromium\Application\chrome.exe" (
+    echo [OK] Chromium detected
+) else (
+    echo [INFO] Chromium not found
+)
+
 echo.
 echo NOTE: The system will automatically use any available browser.
-echo      (Chrome, Edge, Firefox, Brave, or Opera in that order)
+echo      (Chrome, Chromium, Edge, Firefox, Brave, Vivaldi, or Opera)
 echo.
 
 echo.

@@ -31,18 +31,58 @@ logger = logging.getLogger(__name__)
 def get_browser_driver():
     """
     Initialize imagery capture driver with multi-backend fallback support.
-    Tries Chrome → Edge → Firefox → Brave → Opera until one works.
+    Tries default browser first, then Chrome → Chromium → Edge → Firefox → Brave → Vivaldi → Opera.
     
     Returns:
         Driver instance for imagery access
     """
-    browsers = [
-        ('Chrome', lambda: webdriver.Chrome(options=get_chrome_options())),
-        ('Microsoft Edge', lambda: webdriver.Edge(options=get_edge_options())),
-        ('Firefox', lambda: webdriver.Firefox(options=get_firefox_options())),
-        ('Brave', lambda: webdriver.Chrome(options=get_brave_options())),
-        ('Opera', lambda: webdriver.Chrome(options=get_opera_options())),
-    ]
+    import winreg
+    import subprocess
+    
+    # Try to get default browser
+    default_browser = None
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice') as key:
+            prog_id = winreg.QueryValueEx(key, 'ProgId')[0]
+            if 'Chrome' in prog_id and 'Chromium' not in prog_id:
+                default_browser = 'Chrome'
+            elif 'Chromium' in prog_id:
+                default_browser = 'Chromium'
+            elif 'Edge' in prog_id or 'MSEdge' in prog_id:
+                default_browser = 'Microsoft Edge'
+            elif 'Firefox' in prog_id:
+                default_browser = 'Firefox'
+            elif 'Brave' in prog_id:
+                default_browser = 'Brave'
+            elif 'Vivaldi' in prog_id:
+                default_browser = 'Vivaldi'
+            elif 'Opera' in prog_id:
+                default_browser = 'Opera'
+    except:
+        pass
+    
+    # Define all browsers with their initialization functions
+    all_browsers = {
+        'Chrome': lambda: webdriver.Chrome(options=get_chrome_options()),
+        'Chromium': lambda: webdriver.Chrome(options=get_chromium_options()),
+        'Microsoft Edge': lambda: webdriver.Edge(options=get_edge_options()),
+        'Firefox': lambda: webdriver.Firefox(options=get_firefox_options()),
+        'Brave': lambda: webdriver.Chrome(options=get_brave_options()),
+        'Vivaldi': lambda: webdriver.Chrome(options=get_vivaldi_options()),
+        'Opera': lambda: webdriver.Chrome(options=get_opera_options()),
+    }
+    
+    # Build priority list: default browser first, then others
+    browsers = []
+    if default_browser and default_browser in all_browsers:
+        browsers.append((default_browser, all_browsers[default_browser]))
+        logger.info(f"Detected default browser: {default_browser}")
+    
+    # Add remaining browsers in preferred order
+    preferred_order = ['Chrome', 'Chromium', 'Microsoft Edge', 'Firefox', 'Brave', 'Vivaldi', 'Opera']
+    for browser_name in preferred_order:
+        if browser_name not in [b[0] for b in browsers]:  # Skip if already added as default
+            browsers.append((browser_name, all_browsers[browser_name]))
     
     logger.info("Detecting available browsers for satellite imagery capture...")
     last_error = None
@@ -63,9 +103,11 @@ def get_browser_driver():
         "\n"
         "The system requires one of the following browsers:\n"
         "  • Google Chrome (recommended)\n"
+        "  • Chromium\n"
         "  • Microsoft Edge\n"
         "  • Mozilla Firefox\n"
         "  • Brave Browser\n"
+        "  • Vivaldi\n"
         "  • Opera Browser\n"
         "\n"
         "Please install at least one browser and ensure it's accessible.\n"
@@ -94,6 +136,66 @@ def get_chrome_options():
     chrome_options.add_argument("--incognito")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
     return chrome_options
+
+def get_chromium_options():
+    """Get Chromium browser options for headless mode."""
+    chromium_options = ChromeOptions()
+    
+    # Common Chromium installation paths
+    chromium_paths = [
+        r"C:\Program Files\Chromium\Application\chrome.exe",
+        r"C:\Program Files (x86)\Chromium\Application\chrome.exe",
+        os.path.expanduser(r"~\AppData\Local\Chromium\Application\chrome.exe"),
+    ]
+    
+    for chromium_path in chromium_paths:
+        if os.path.exists(chromium_path):
+            chromium_options.binary_location = chromium_path
+            break
+    
+    chromium_options.add_argument("--headless=new")
+    chromium_options.add_argument("--window-size=1920,1080")
+    chromium_options.add_argument("--disable-blink-features=AutomationControlled")
+    chromium_options.add_argument("--disable-gpu")
+    chromium_options.add_argument("--no-sandbox")
+    chromium_options.add_argument("--disable-dev-shm-usage")
+    chromium_options.add_argument("--disable-extensions")
+    chromium_options.add_argument("--log-level=3")
+    chromium_options.add_argument("--disable-cache")
+    chromium_options.add_argument("--disk-cache-size=0")
+    chromium_options.add_argument("--incognito")
+    chromium_options.add_experimental_option("excludeSwitches", ["enable-logging"])
+    return chromium_options
+
+def get_chromium_options():
+    """Get Chromium browser options for headless mode."""
+    chromium_options = ChromeOptions()
+    
+    # Common Chromium installation paths
+    chromium_paths = [
+        r"C:\Program Files\Chromium\Application\chrome.exe",
+        r"C:\Program Files (x86)\Chromium\Application\chrome.exe",
+        os.path.expanduser(r"~\AppData\Local\Chromium\Application\chrome.exe"),
+    ]
+    
+    for chromium_path in chromium_paths:
+        if os.path.exists(chromium_path):
+            chromium_options.binary_location = chromium_path
+            break
+    
+    chromium_options.add_argument("--headless=new")
+    chromium_options.add_argument("--window-size=1920,1080")
+    chromium_options.add_argument("--disable-blink-features=AutomationControlled")
+    chromium_options.add_argument("--disable-gpu")
+    chromium_options.add_argument("--no-sandbox")
+    chromium_options.add_argument("--disable-dev-shm-usage")
+    chromium_options.add_argument("--disable-extensions")
+    chromium_options.add_argument("--log-level=3")
+    chromium_options.add_argument("--disable-cache")
+    chromium_options.add_argument("--disk-cache-size=0")
+    chromium_options.add_argument("--incognito")
+    chromium_options.add_experimental_option("excludeSwitches", ["enable-logging"])
+    return chromium_options
 
 
 def get_edge_options():
@@ -139,6 +241,31 @@ def get_brave_options():
     brave_options.add_argument("--no-sandbox")
     brave_options.add_argument("--disable-dev-shm-usage")
     return brave_options
+
+
+def get_vivaldi_options():
+    """Get Vivaldi browser options for headless mode."""
+    vivaldi_options = ChromeOptions()
+    
+    # Common Vivaldi installation paths
+    vivaldi_paths = [
+        r"C:\Program Files\Vivaldi\Application\vivaldi.exe",
+        r"C:\Program Files (x86)\Vivaldi\Application\vivaldi.exe",
+        os.path.expanduser(r"~\AppData\Local\Vivaldi\Application\vivaldi.exe"),
+    ]
+    
+    for vivaldi_path in vivaldi_paths:
+        if os.path.exists(vivaldi_path):
+            vivaldi_options.binary_location = vivaldi_path
+            break
+    
+    vivaldi_options.add_argument("--headless=new")
+    vivaldi_options.add_argument("--window-size=1920,1080")
+    vivaldi_options.add_argument("--disable-blink-features=AutomationControlled")
+    vivaldi_options.add_argument("--disable-gpu")
+    vivaldi_options.add_argument("--no-sandbox")
+    vivaldi_options.add_argument("--disable-dev-shm-usage")
+    return vivaldi_options
 
 
 def get_opera_options():
