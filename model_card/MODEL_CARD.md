@@ -26,9 +26,9 @@ Our system employs a **state-of-the-art multi-strategy ensemble** approach:
 - **Model 6**: solarpanel_det_v4.pt - YOLOv8 Detection - 21.48 MB (diversity)
 
 **Custom Model Priority System**:
-- **2x Confidence Weight**: Custom model votes count twice as much
-- **+10% Confidence Bonus**: Extra boost when custom model contributes
-- **Lower Threshold**: 0.03 vs 0.05 for adversarial filtering
+- **2.5x Confidence Weight**: Custom model votes count 2.5 times as much (increased from 2.0x)
+- **+15% Confidence Bonus**: Extra boost when custom model contributes (increased from +10%)
+- **Lower Threshold**: 0.025 vs 0.05 for adversarial filtering (more lenient by 16.7%)
 
 **Advanced Detection Pipeline**:
 1. **Custom Model Priority**: Your trained model leads ensemble decisions with 2x weight
@@ -286,14 +286,32 @@ See [TECHNICAL_REPORT.md](../TECHNICAL_REPORT.md) for detailed implementation an
   "has_solar": true,
   "confidence": 0.92,
   "pv_area_sqm_est": 45.3,
+  "euclidean_distance_m_est": 0.0,
   "bbox_or_mask": "[[x1,y1], [x2,y2], ...]",
   "buffer_radius_sqft": 2400,
   "qc_status": "VERIFIABLE",
   "consensus_status": "HIGH_CONSENSUS",
   "tta_variants": 5,
-  "num_agreeing_models": 4
+  "num_agreeing_models": 4,
+  "power_estimate": {
+    "peak_power_kw": 4.5,
+    "daily_energy_kwh": 24.8,
+    "monthly_energy_kwh": 744,
+    "yearly_energy_kwh": 9048
+  },
+  "processing_time_seconds": 6.2
 }
 ```
+
+### 5.2.1 Web Interface Features
+- **Real-time Progress Tracking**: 4-step progress indicator with live updates
+  - Step 1: Validating Coordinates (0-25%)
+  - Step 2: Fetching Satellite Imagery (25-50%)
+  - Step 3: Running AI Detection (50-75%)
+  - Step 4: Generating Results (75-100%)
+- **Visual Feedback**: Animated progress bar with color-coded status (pending/active/completed)
+- **PDF Export**: One-click generation of professional reports with statistics
+- **User Feedback System**: Thumbs up/down for reinforcement learning
 
 ### 5.3 Processing Pipeline
 1. **Imagery Fetch**: Automated satellite imagery retrieval (1-2s)
@@ -358,20 +376,115 @@ detections = detector.run_inference(
 ```
 
 ### 6.3 API Integration
+
+**Security Features** (Added January 2026):
+- **Input Validation**: Comprehensive coordinate validation (-90 to 90 lat, -180 to 180 lon)
+- **Type Checking**: Strict type enforcement with NaN/Infinity detection
+- **SQL Injection Prevention**: Input sanitization, special character filtering
+- **Path Traversal Protection**: Blocked `../` patterns in feedback paths
+- **Range Validation**: Sample ID limits, precision caps (max 10 decimals)
+- **Error Handling**: Detailed HTTP 400 responses for invalid input
+
+**Detection API**:
 ```python
-# FastAPI endpoint (included)
-POST /api/detect
+POST /api/verify/single
 {
   "sample_id": 1001,
   "latitude": 28.6139,
-  "longitude": 77.209
+  "longitude": 77.209,
+  "use_hybrid": true
+}
+
+Response includes:
+- Detection results (has_solar, confidence, area)
+- Power generation estimates (kW, kWh)
+- Euclidean distance from center (meters)
+- QC status and overlay URL
+- Processing time
+```
+
+**PDF Export API** (Added January 2026):
+```python
+GET /api/export/pdf/{sample_id}
+
+Generates professional PDF report with:
+- Executive summary (status, confidence, area, QC)
+- Location details (coordinates, buffer, distance)
+- Detection visualization (overlay image)
+- Power generation estimates (daily/monthly/yearly)
+- Technical statistics (processing time, algorithm)
+- Professional formatting (ReportLab, Letter size)
+```
+
+**Web Interface Features** (Added January 2026):
+- **Real-time Progress Tracking**: 4-step indicator with live updates
+  1. Validating Coordinates (0-25%)
+  2. Fetching Satellite Imagery (25-50%)
+  3. Running AI Detection (50-75%)
+  4. Generating Results (75-100%)
+- **Visual Feedback**: Animated progress bar with color-coded status
+- **PDF Export Button**: One-click professional report generation
+- **User Feedback System**: Thumbs up/down for reinforcement learning
+- **Input Validation**: Comprehensive coordinate validation (-90 to 90 lat, -180 to 180 lon)
+- **Type Checking**: Strict type enforcement (int/float validation, NaN/Infinity detection)
+- **SQL Injection Prevention**: Input sanitization, special character filtering, length limits
+- **Path Traversal Protection**: Blocked `../` patterns in file paths
+- **Range Validation**: Sample ID (1 to 9,999,999,999,999), precision limits (max 10 decimals)
+- **Error Handling**: HTTP 400 responses for invalid input with detailed error messages
+
+**Detection API**:
+```python
+# FastAPI endpoint (included)
+POST /api/verify/single
+{
+  "sample_id": 1001,
+  "latitude": 28.6139,
+  "longitude": 77.209,
+  "use_hybrid": true
+}
+
+Response:
+{
+  "sample_id": 1001,
+  "has_solar": true,
+  "confidence": 0.92,
+  "pv_area_sqm_est": 45.3,
+  "euclidean_distance_m_est": 0.0,
+  "qc_status": "VERIFIABLE",
+  "power_estimate": {...},
+  "overlay_url": "/outputs/overlays/1001_overlay.png",
+  "processing_time_seconds": 6.2
+}
+```
+
+**PDF Export API**:
+```python
+GET /api/export/pdf/{sample_id}
+
+Returns: PDF file download (solar_detection_report_{sample_id}.pdf)
+
+PDF Contents:
+- Executive Summary (status, confidence, area, QC)
+- Location Details (coordinates, buffer zone, distance)
+- Detection Visualization (overlay image)
+- Power Generation Estimates (kW, daily/monthly/yearly kWh)
+- Technical Statistics (processing time, algorithm details)
+```
+
+**Feedback API**:
+```python
+POST /api/feedback
+{
+  "sample_id": "1001",
+  "rating": "good",  # or "bad"
+  "timestamp": "2026-01-02T10:30:00Z"
 }
 
 Response:
 {
   "status": "success",
-  "prediction": {...},
-  "overlay_path": "outputs/overlays/1001_overlay.png"
+  "message": "Feedback recorded",
+  "overlay_saved": null  # Non-null if rating=bad
 }
 ```
 
@@ -459,16 +572,24 @@ Response:
 ## 10. Model Card Change Log
 
 | Date | Version | Changes |
-|------|---------|---------|| Dec 2025 | 4.5 | Added detection model to ensemble (5 models total) || Dec 2025 | 4.0 | Added TTA, multi-scale, polygon refinement |
+|------|---------|---------|| Jan 2026 | 4.1 | **Progress indicators**, **Enhanced security**, **PDF export**, **UX improvements** || Dec 2025 | 4.0 | Added TTA, multi-scale, polygon refinement |
+| Dec 2025 | 3.5 | Increased custom model priority (2.5x weight, +15% bonus) |
 | Dec 2025 | 3.0 | Hybrid ensemble/adversarial approach |
 | Dec 2025 | 2.0 | 3-model ensemble implementation |
 | Nov 2025 | 1.0 | Initial single-model release |
 
+**Version 4.1 Highlights (January 2026)**:
+- **Progress Tracking**: 4-step real-time indicators with animated UI
+- **Enhanced Security**: Input validation, SQL injection prevention, path traversal protection
+- **PDF Reports**: Professional exportable reports with statistics (ReportLab)
+- **User Experience**: Color-coded status, one-click downloads, smooth animations
+- **Custom Model**: Boosted to 2.5x weight (+15% bonus, 2.5% threshold)
+
 ---
 
 **Model Card Template**: Adapted from Google's Model Card framework  
-**Last Updated**: December 26, 2025  
-**Document Version**: 1.0  
+**Last Updated**: January 2, 2026  
+**Document Version**: 1.1  
 
 ---
 

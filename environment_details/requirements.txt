@@ -29,6 +29,10 @@ pycocotools>=2.0.6
 # Progress Bars
 tqdm>=4.65.0
 
+# PDF Generation
+reportlab>=4.0.0
+weasyprint>=60.0
+
 # YAML Configuration
 PyYAML>=6.0
 
