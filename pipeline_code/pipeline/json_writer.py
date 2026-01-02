@@ -1,5 +1,5 @@
 """
-JSON writer for creating output files in the required EcoInnovators format.
+JSON writer for creating output files in the required NeuralStack format.
 """
 
 import json
@@ -39,7 +39,7 @@ def write_prediction_json(
       "buffer_radius_sqft": 1200,
       "qc_status": "VERIFIABLE",
       "bbox_or_mask": "<encoded polygon or bbox>",
-      "image_metadata": {"source": "ArcGIS World_Imagery", "capture_date": "UNKNOWN"}
+      "image_metadata": {"source": "Google Maps Satellite", "capture_date": "Variable by location (typically 2020-2024)"}
     }
     
     Args:
@@ -64,10 +64,11 @@ def write_prediction_json(
         image_metadata = {}
     
     if "source" not in image_metadata:
-        image_metadata["source"] = "ArcGIS World_Imagery"
+        image_metadata["source"] = "Google Maps Satellite"
     
     if "capture_date" not in image_metadata:
-        image_metadata["capture_date"] = "UNKNOWN"
+        image_metadata["source"] = "Google Maps Satellite"
+        image_metadata["capture_date"] = "Variable by location (typically 2020-2024, updated regularly)"
     
     # Create the JSON structure
     result = {

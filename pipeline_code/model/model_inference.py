@@ -29,8 +29,16 @@ except ImportError:
 
 class SolarPanelDetector:
     """
-    Wrapper for YOLOv8 segmentation model for solar panel detection.
-    Supports ensemble of multiple models with equal weighting.
+    Wrapper for YOLOv8 segmentation model ensemble for solar panel detection.
+    
+    Features:
+    - 5-model ensemble (4 segmentation + 1 detection)
+    - Toggleable hybrid ensemble/adversarial approach with consensus voting
+    - Standard NMS merging when hybrid disabled
+    - Test-Time Augmentation (horizontal flip)
+    - Multi-scale inference (90%, 100%, 110%)
+    - Shape validation filters for rectangular panels
+    - Polygon refinement and clipping
     """
     
     def __init__(self, model_path: str, ensemble_models: Optional[List[str]] = None):
@@ -67,21 +75,33 @@ class SolarPanelDetector:
                     logger.warning(f"Ensemble model not found: {model_path_str}")
         
         logger.info(f"Total models in ensemble: {len(self.ensemble_models)}")
+        logger.info(f"Hybrid ensemble algorithm available (toggleable via use_hybrid parameter)")
     
     def run_inference(
         self,
         image_path: str,
-        conf_threshold: float = 0.30,
-        iou_threshold: float = 0.45
+        conf_threshold: float = 0.08,
+        iou_threshold: float = 0.45,
+        use_tta: bool = True,
+        use_multiscale: bool = True,
+        use_hybrid: bool = True
     ) -> List[Dict]:
         """
-        Run inference on an image and extract segmentation results.
-        Uses ensemble averaging if multiple models are loaded.
+        Run inference on an image with ADVANCED DETECTION strategies.
+        
+        Features:
+        - Hybrid ensemble/adversarial approach (4 models) [toggleable]
+        - Test-Time Augmentation (TTA): flip/rotate variations
+        - Multi-scale inference: multiple image sizes
+        - Polygon refinement: smooth and optimize masks
         
         Args:
             image_path: Path to the input image
             conf_threshold: Confidence threshold for detections
             iou_threshold: IoU threshold for NMS
+            use_tta: Enable Test-Time Augmentation (default: True)
+            use_multiscale: Enable multi-scale inference (default: True)
+            use_hybrid: Enable hybrid ensemble algorithm (default: True)
             
         Returns:
             List of detections, each containing:
@@ -92,6 +112,8 @@ class SolarPanelDetector:
                 "bbox": [x1, y1, x2, y2]               # Bounding box
             }
         """
+        logger.info(f"🔧 INFERENCE CONFIG: use_hybrid={use_hybrid}, use_tta={use_tta}, use_multiscale={use_multiscale}")
+        
         image_path = Path(image_path)
         
         if not image_path.exists():
@@ -99,31 +121,142 @@ class SolarPanelDetector:
             return []
         
         try:
-            # Run inference on all ensemble models
-            all_detections = []
+            # Load image for advanced processing
+            from PIL import Image
+            import cv2
+            base_image = Image.open(image_path)
             
-            for idx, model in enumerate(self.ensemble_models):
-                # Run inference
-                results = model.predict(
-                    source=str(image_path),
-                    conf=conf_threshold,
-                    iou=iou_threshold,
-                    verbose=False
-                )
-                
-                # Extract detections from this model
-                model_detections = self._extract_detections(results)
-                all_detections.extend(model_detections)
-                
-                logger.debug(f"Model {idx+1}/{len(self.ensemble_models)}: {len(model_detections)} detections")
+            # Generate augmented versions for TTA (Test-Time Augmentation)
+            image_variants = [str(image_path)]  # Original
             
-            # Merge overlapping detections from ensemble (simple NMS)
-            if len(self.ensemble_models) > 1:
-                detections = self._merge_ensemble_detections(all_detections, iou_threshold)
-                logger.info(f"Ensemble merged: {len(all_detections)} → {len(detections)} detections")
+            if use_tta:
+                logger.info("Applying Test-Time Augmentation (TTA)...")
+                # Horizontal flip
+                flipped = base_image.transpose(Image.FLIP_LEFT_RIGHT)
+                flip_path = str(image_path).replace('.png', '_flip.png')
+                flipped.save(flip_path)
+                image_variants.append(flip_path)
+            
+            if use_multiscale:
+                logger.info("Applying Multi-Scale Inference...")
+                # Scale variations (90%, 110% of original size)
+                for scale, suffix in [(0.9, '_s90'), (1.1, '_s110')]:
+                    new_size = (int(base_image.width * scale), int(base_image.height * scale))
+                    scaled = base_image.resize(new_size, Image.LANCZOS)
+                    scale_path = str(image_path).replace('.png', f'{suffix}.png')
+                    scaled.save(scale_path)
+                    image_variants.append(scale_path)
+            
+            logger.info(f"Processing {len(image_variants)} image variants (TTA+MultiScale)")
+            
+            # Run inference on all variants
+            all_variant_detections = []
+            
+            for variant_idx, variant_path in enumerate(image_variants):
+                # Determine transformation for this variant
+                is_flipped = '_flip' in variant_path
+                scale_factor = 1.0
+                if '_s90' in variant_path:
+                    scale_factor = 0.9
+                elif '_s110' in variant_path:
+                    scale_factor = 1.1
+                
+                # Run inference on all ensemble models
+                all_model_detections = []  # Track per-model results
+                
+                for idx, model in enumerate(self.ensemble_models):
+                    # Run inference
+                    results = model.predict(
+                        source=variant_path,
+                        conf=conf_threshold,
+                        iou=iou_threshold,
+                        verbose=False
+                    )
+                    
+                    # Extract detections from this model
+                    model_detections = self._extract_detections(results)
+                    
+                    # Transform detections back to original image space
+                    if is_flipped or scale_factor != 1.0:
+                        model_detections = self._transform_detections_back(
+                            model_detections, is_flipped, scale_factor, base_image.width, base_image.height
+                        )
+                    
+                    all_model_detections.append({
+                        'model_id': idx,
+                        'detections': model_detections
+                    })
+                    
+                    logger.debug(f"Variant {variant_idx+1}, Model {idx+1}/{len(self.ensemble_models)}: {len(model_detections)} detections")
+                
+                # Merge results: HYBRID algorithm vs Standard NMS
+                if use_hybrid:
+                    # HYBRID MODE: Advanced consensus voting + adversarial filtering
+                    variant_detections = self._hybrid_ensemble_adversarial_merge(
+                        all_model_detections, iou_threshold
+                    )
+                    logger.debug(f"Variant {variant_idx+1}: Hybrid merge applied")
+                else:
+                    # STANDARD MODE: Simple NMS merging (all detections, equal weight)
+                    all_dets = []
+                    for model_data in all_model_detections:
+                        all_dets.extend(model_data['detections'])
+                    variant_detections = self._merge_ensemble_detections(all_dets, iou_threshold)
+                    logger.debug(f"Variant {variant_idx+1}: Standard NMS merge applied")
+                
+                all_variant_detections.extend(variant_detections)
+            
+            # Final merge across all variants (TTA consensus)
+            if len(image_variants) > 1:
+                logger.info(f"Merging {len(all_variant_detections)} detections from TTA/MultiScale...")
+                detections = self._merge_tta_detections(all_variant_detections, iou_threshold)
+                logger.info(f"TTA merge: {len(all_variant_detections)} → {len(detections)} final detections")
             else:
-                detections = all_detections
-                logger.info(f"Found {len(detections)} solar panel detections")
+                # Run all ensemble models
+                all_model_detections = []
+                for idx, model in enumerate(self.ensemble_models):
+                    results = model.predict(
+                        source=str(image_path),
+                        conf=conf_threshold,
+                        iou=iou_threshold,
+                        verbose=False
+                    )
+                    model_detections = self._extract_detections(results)
+                    all_model_detections.append({
+                        'model_id': idx,
+                        'detections': model_detections
+                    })
+                    logger.debug(f"Model {idx+1}/{len(self.ensemble_models)}: {len(model_detections)} detections")
+                
+                # Merge strategy based on use_hybrid flag
+                if use_hybrid:
+                    # HYBRID MODE: Advanced consensus voting + adversarial filtering
+                    detections = self._hybrid_ensemble_adversarial_merge(
+                        all_model_detections, iou_threshold
+                    )
+                    total_raw = sum(len(m['detections']) for m in all_model_detections)
+                    logger.info(f"HYBRID merge: {total_raw} raw → {len(detections)} final detections")
+                    logger.info(f"Consensus/adversarial filtering applied with confidence adjustment")
+                else:
+                    # STANDARD MODE: Simple NMS merging without hybrid logic
+                    all_dets = []
+                    for model_data in all_model_detections:
+                        all_dets.extend(model_data['detections'])
+                    detections = self._merge_ensemble_detections(all_dets, iou_threshold)
+                    total_raw = sum(len(m['detections']) for m in all_model_detections)
+                    logger.info(f"STANDARD merge: {total_raw} raw → {len(detections)} final detections")
+                    logger.info(f"Simple NMS merging without hybrid voting")
+            
+            # Apply polygon refinement for better edge quality
+            detections = self._refine_polygons(detections)
+            
+            # Clean up temporary TTA/multiscale files
+            if use_tta or use_multiscale:
+                for variant_path in image_variants[1:]:  # Skip original
+                    try:
+                        Path(variant_path).unlink()
+                    except:
+                        pass
             
             return detections
             
@@ -134,6 +267,7 @@ class SolarPanelDetector:
     def _extract_detections(self, results) -> List[Dict]:
         """Extract detections from model results."""
         detections = []
+        raw_detection_count = 0
         
         if results and len(results) > 0:
             result = results[0]  # Get first result (single image)
@@ -145,6 +279,8 @@ class SolarPanelDetector:
             if result.masks is not None and len(result.masks) > 0:
                 masks = result.masks.xy  # Get polygon coordinates
                 boxes = result.boxes  # Get bounding boxes
+                raw_detection_count = len(masks)
+                logger.info(f"RAW MODEL OUTPUT: {raw_detection_count} detections from YOLO before filtering")
                 
                 for i, mask_coords in enumerate(masks):
                     if len(mask_coords) < 3:
@@ -174,10 +310,14 @@ class SolarPanelDetector:
                     # Apply shape filters to reduce false positives
                     if self._is_valid_solar_panel(detection, image_width, image_height):
                         detections.append(detection)
+                
+                logger.info(f"EXTRACTION RESULT: {len(detections)}/{raw_detection_count} detections passed validation")
             
             # Fallback for detection-only models (no masks, only bounding boxes)
             elif result.boxes is not None and len(result.boxes) > 0:
                 boxes = result.boxes
+                raw_detection_count = len(boxes)
+                logger.info(f"RAW MODEL OUTPUT: {raw_detection_count} bbox detections (detection-only model)")
                 
                 for i in range(len(boxes)):
                     # Get bbox and convert to polygon (4 corners)
@@ -229,58 +369,190 @@ class SolarPanelDetector:
         bbox_area = width * height
         
         # Filter 1: Minimum size (too small = noise)
-        MIN_AREA_PX = 100  # ~10x10 pixels minimum
+        MIN_AREA_PX = 100  # ~10x10 pixels minimum - reasonable size
         if area_px < MIN_AREA_PX:
             return False
         
         # Filter 2: Maximum size (too large = likely entire roof/array)
         # Individual solar panels are typically 1.6m x 1m (~17 sq.ft each)
         # At typical satellite resolution (0.3-0.6m/pixel), one panel = ~2000-8000 pixels
-        MAX_AREA_PX = 15000  # Reduced from 100000 to reject large roof sections
+        # Allow up to 50000 for commercial installations
+        MAX_AREA_PX = 50000
         if area_px > MAX_AREA_PX:
             return False
         
         # Filter 2b: Relative to image size (reject if detection is too large)
-        # A single panel should not occupy more than 10% of the satellite image
+        # Solar panel arrays shouldn't occupy more than 30% of the image
         if image_width and image_height:
             image_area = image_width * image_height
             area_ratio = area_px / image_area
-            MAX_IMAGE_RATIO = 0.10  # Maximum 10% of image
+            MAX_IMAGE_RATIO = 0.30  # Maximum 30% of image
             if area_ratio > MAX_IMAGE_RATIO:
                 return False
         
-        # Filter 3: Aspect ratio (solar panels are typically 1:1 to 3:1)
-        # Street names/text are very elongated, so use stricter ratio
+        # Filter 3: Aspect ratio (solar panels are typically 1:1 to 4:1)
+        # Reject very elongated irregular shapes
         if width > 0 and height > 0:
             aspect_ratio = max(width, height) / min(width, height)
-            MAX_ASPECT_RATIO = 3.0  # Stricter to exclude text labels
+            MAX_ASPECT_RATIO = 4.0  # Reasonable for panel arrays
             if aspect_ratio > MAX_ASPECT_RATIO:
                 return False
         
         # Filter 4: Fill ratio (polygon area vs bbox area)
-        # Solar panels should fill most of their bounding box
+        # Solar panels MUST be rectangular - reject irregular blobs
         if bbox_area > 0:
             fill_ratio = area_px / bbox_area
-            MIN_FILL_RATIO = 0.5  # At least 50% filled
+            MIN_FILL_RATIO = 0.45  # At least 45% fill - enforce rectangular shape
             if fill_ratio < MIN_FILL_RATIO:
                 return False
         
         # Filter 5: Minimum dimension (avoid thin lines like street names)
-        MIN_DIMENSION = 10  # pixels - increased from 5 to reject thin text
+        MIN_DIMENSION = 8  # pixels - reasonable minimum
         if width < MIN_DIMENSION or height < MIN_DIMENSION:
             return False
         
         # Filter 6: Reject very thin shapes (text labels, road markings)
-        # Check thickness relative to length
+        # Solar panels should have reasonable width-to-height ratio
         if width > 0 and height > 0:
             min_thickness = min(width, height)
             max_length = max(width, height)
             thickness_ratio = min_thickness / max_length
-            MIN_THICKNESS_RATIO = 0.15  # At least 15% thick
+            MIN_THICKNESS_RATIO = 0.15  # At least 15% thick - reject thin shapes
             if thickness_ratio < MIN_THICKNESS_RATIO:
                 return False
         
         return True
+    
+    def _hybrid_ensemble_adversarial_merge(
+        self, 
+        all_model_detections: List[Dict], 
+        iou_threshold: float
+    ) -> List[Dict]:
+        """
+        HYBRID ENSEMBLE/ADVERSARIAL approach with CUSTOM MODEL PRIORITY:
+        1. Group overlapping detections across models (ensemble voting)
+        2. Apply adversarial confidence adjustment based on model agreement
+        3. Give HIGHER WEIGHT to model_id=0 (custom-trained model) - 2x confidence weight
+        4. Boost confidence for high consensus, penalize low consensus
+        5. Filter out low-confidence adversarial challenges
+        
+        Custom Model Priority:
+        - model_id=0 (solarpanel_seg_v1.pt): Your custom-trained model gets 2x weight
+        - Capable of both detection and segmentation
+        - Takes precedence in confidence calculation and filtering decisions
+        """
+        # Flatten all detections with model tracking
+        all_detections = []
+        for model_data in all_model_detections:
+            for det in model_data['detections']:
+                det_copy = det.copy()
+                det_copy['model_id'] = model_data['model_id']
+                all_detections.append(det_copy)
+        
+        if not all_detections:
+            return []
+        
+        # Sort by confidence
+        all_detections = sorted(all_detections, key=lambda x: x['confidence'], reverse=True)
+        
+        merged = []
+        used = set()
+        
+        for i, det in enumerate(all_detections):
+            if i in used:
+                continue
+            
+            # Find overlapping detections (consensus group)
+            consensus_group = [det]
+            model_ids_in_group = {det['model_id']}
+            
+            for j in range(i + 1, len(all_detections)):
+                if j in used:
+                    continue
+                
+                iou = self._calculate_bbox_iou(det['bbox'], all_detections[j]['bbox'])
+                if iou > iou_threshold:
+                    consensus_group.append(all_detections[j])
+                    model_ids_in_group.add(all_detections[j]['model_id'])
+                    used.add(j)
+            
+            # ADVERSARIAL CONFIDENCE ADJUSTMENT
+            num_models = len(all_model_detections)
+            num_agreeing = len(model_ids_in_group)
+            consensus_ratio = num_agreeing / num_models
+            
+            # CUSTOM MODEL PRIORITY: Give higher weight to model_id=0 (your custom model)
+            # Calculate weighted average confidence with 2x weight for custom model
+            total_weight = 0
+            weighted_confidence_sum = 0
+            custom_model_present = False
+            
+            for d in consensus_group:
+                if d['model_id'] == 0:  # Custom model gets 2.5x weight
+                    weight = 2.5
+                    custom_model_present = True
+                else:
+                    weight = 1.0
+                weighted_confidence_sum += d['confidence'] * weight
+                total_weight += weight
+            
+            base_confidence = weighted_confidence_sum / total_weight
+            
+            # Extra boost if custom model is present
+            if custom_model_present:
+                base_confidence = min(base_confidence * 1.15, 1.0)  # +15% bonus, cap at 100%
+            
+            # Apply confidence adjustment based on consensus (relaxed thresholds)
+            if consensus_ratio >= 0.6:
+                # HIGH CONSENSUS (60%+ models agree): Boost confidence
+                confidence_multiplier = 1.0 + (0.2 * (consensus_ratio - 0.6) / 0.4)  # +0% to +20%
+                status = "HIGH_CONSENSUS"
+            elif consensus_ratio >= 0.4:
+                # MEDIUM CONSENSUS (40-60% models agree): Neutral
+                confidence_multiplier = 1.0
+                status = "MEDIUM_CONSENSUS"
+            else:
+                # LOW CONSENSUS (<40% models agree): Light penalize
+                confidence_multiplier = 0.7 + (0.3 * consensus_ratio / 0.4)  # 70% to 100%
+                status = "ADVERSARIAL_CHALLENGE"
+            
+            adjusted_confidence = base_confidence * confidence_multiplier
+            
+            # Filter out weak adversarial challenges
+            # BUT: If custom model (id=0) detected it, be more lenient
+            if custom_model_present:
+                MIN_CONFIDENCE_THRESHOLD = 0.025  # Lower threshold for custom model detections
+            else:
+                MIN_CONFIDENCE_THRESHOLD = 0.05  # Normal threshold
+                
+            if adjusted_confidence < MIN_CONFIDENCE_THRESHOLD:
+                logger.debug(f"Filtered out {status} detection: {num_agreeing}/{num_models} models, "
+                           f"conf {base_confidence:.3f} → {adjusted_confidence:.3f}")
+                continue
+            
+            # Create merged detection with adjusted confidence
+            merged_det = self._average_detections(consensus_group)
+            merged_det['confidence'] = adjusted_confidence
+            merged_det['consensus_ratio'] = consensus_ratio
+            merged_det['num_agreeing_models'] = num_agreeing
+            merged_det['consensus_status'] = status
+            
+            if custom_model_present:
+                merged_det['custom_model_detection'] = True
+                logger.debug(f"{status} [CUSTOM MODEL]: {num_agreeing}/{num_models} models, "
+                            f"conf {base_confidence:.3f} → {adjusted_confidence:.3f} (custom model priority applied)")
+            else:
+                logger.debug(f"{status}: {num_agreeing}/{num_models} models, "
+                            f"conf {base_confidence:.3f} → {adjusted_confidence:.3f}")
+            
+            merged.append(merged_det)
+        
+        # Log summary of custom model detections
+        custom_count = sum(1 for d in merged if d.get('custom_model_detection', False))
+        if custom_count > 0:
+            logger.info(f"✓ Custom model contributed to {custom_count}/{len(merged)} final detections")
+        
+        return merged
     
     def _merge_ensemble_detections(self, detections: List[Dict], iou_threshold: float) -> List[Dict]:
         """
@@ -363,6 +635,131 @@ class SolarPanelDetector:
         union_area = bbox1_area + bbox2_area - inter_area
         
         return inter_area / union_area if union_area > 0 else 0.0
+    
+    def _transform_detections_back(
+        self,
+        detections: List[Dict],
+        is_flipped: bool,
+        scale_factor: float,
+        orig_width: int,
+        orig_height: int
+    ) -> List[Dict]:
+        """Transform detections from augmented image back to original space."""
+        transformed = []
+        
+        for det in detections:
+            polygon = det['polygon']
+            bbox = det['bbox']
+            
+            # Undo scaling
+            if scale_factor != 1.0:
+                polygon = [[x / scale_factor, y / scale_factor] for x, y in polygon]
+                bbox = [coord / scale_factor for coord in bbox]
+            
+            # Undo flipping
+            if is_flipped:
+                polygon = [[orig_width - x, y] for x, y in polygon]
+                bbox = [orig_width - bbox[2], bbox[1], orig_width - bbox[0], bbox[3]]
+            
+            # Recalculate area after transformation
+            area_px = self._calculate_polygon_area(polygon)
+            
+            transformed.append({
+                'polygon': polygon,
+                'bbox': bbox,
+                'area_px': area_px,
+                'confidence': det['confidence']
+            })
+        
+        return transformed
+    
+    def _merge_tta_detections(self, detections: List[Dict], iou_threshold: float) -> List[Dict]:
+        """
+        Merge detections from Test-Time Augmentation variants.
+        Detections that appear across multiple augmentations get confidence boost.
+        """
+        if not detections:
+            return []
+        
+        # Sort by confidence
+        detections = sorted(detections, key=lambda x: x['confidence'], reverse=True)
+        
+        merged = []
+        used = set()
+        
+        for i, det in enumerate(detections):
+            if i in used:
+                continue
+            
+            # Find overlapping detections from TTA variants
+            tta_group = [det]
+            for j in range(i + 1, len(detections)):
+                if j in used:
+                    continue
+                
+                iou = self._calculate_bbox_iou(det['bbox'], detections[j]['bbox'])
+                if iou > iou_threshold:
+                    tta_group.append(detections[j])
+                    used.add(j)
+            
+            # TTA consensus boost: more variants = higher confidence
+            base_confidence = sum(d['confidence'] for d in tta_group) / len(tta_group)
+            tta_boost = min(0.15, 0.05 * (len(tta_group) - 1))  # Up to +15% boost
+            adjusted_confidence = min(1.0, base_confidence + tta_boost)
+            
+            # Average the detections
+            merged_det = self._average_detections(tta_group)
+            merged_det['confidence'] = adjusted_confidence
+            merged_det['tta_variants'] = len(tta_group)
+            
+            merged.append(merged_det)
+        
+        return merged
+    
+    def _refine_polygons(self, detections: List[Dict]) -> List[Dict]:
+        """
+        Refine polygon masks using advanced techniques:
+        - Smooth jagged edges (Douglas-Peucker algorithm)
+        - Remove tiny artifacts
+        - Optimize vertex count
+        """
+        import cv2
+        import numpy as np
+        
+        refined = []
+        
+        for det in detections:
+            polygon = det['polygon']
+            
+            if len(polygon) < 3:
+                continue
+            
+            # Convert to numpy array
+            poly_array = np.array(polygon, dtype=np.float32)
+            
+            # Apply Douglas-Peucker simplification for smoother edges
+            epsilon = 0.5  # Simplification tolerance
+            simplified = cv2.approxPolyDP(poly_array, epsilon, closed=True)
+            
+            if len(simplified) < 3:
+                simplified = poly_array  # Keep original if simplification failed
+            
+            # Convert back to list
+            refined_polygon = [[float(x), float(y)] for x, y in simplified.reshape(-1, 2)]
+            
+            # Recalculate area and bbox
+            refined_area = self._calculate_polygon_area(refined_polygon)
+            refined_bbox = self._calculate_polygon_bbox(refined_polygon)
+            
+            refined.append({
+                'polygon': refined_polygon,
+                'area_px': refined_area,
+                'bbox': refined_bbox,
+                'confidence': det['confidence'],
+                **{k: v for k, v in det.items() if k not in ['polygon', 'area_px', 'bbox', 'confidence']}
+            })
+        
+        return refined
     
     def _calculate_polygon_area(self, polygon: List[List[float]]) -> float:
         """

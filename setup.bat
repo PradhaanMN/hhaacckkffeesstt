@@ -1,13 +1,13 @@
 @echo off
 REM ================================================================================
 REM Solar Panel Detection System - Quick Setup
-REM EcoInnovators Ideathon 2026
+REM NeuralStack Ecoinnovators ideathon 2026
 REM ================================================================================
 
 echo.
 echo ================================================================================
 echo   SOLAR PANEL DETECTION SYSTEM - SETUP
-echo   EcoInnovators Ideathon 2026
+echo   NeuralStack Ecoinnovators ideathon 2026
 echo ================================================================================
 echo.
 
@@ -65,6 +65,24 @@ if errorlevel 1 (
 )
 echo [SUCCESS] Virtual environment activated!
 echo.
+
+REM Activate API key if evaluator file exists
+if exist .env.evaluator (
+    echo [INFO] Checking for API key...
+    copy /Y .env.evaluator .env >nul 2>&1
+    if errorlevel 1 (
+        echo [INFO] No API key found - will use browser mode (works great!)
+    ) else (
+        findstr /C:"GOOGLE_MAPS_API_KEY=AIza" .env >nul 2>&1
+        if errorlevel 1 (
+            echo [INFO] No API key configured - using browser mode (3-5s per image)
+            echo [TIP]  For faster processing (0.5s), add API key to .env.evaluator
+        ) else (
+            echo [SUCCESS] API key found - fast mode enabled! (0.5s per image)
+        )
+    )
+    echo.
+)
 
 REM Install requirements
 echo [4/4] Installing dependencies (this may take 3-5 minutes)...

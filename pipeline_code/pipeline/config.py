@@ -1,5 +1,5 @@
 """
-Configuration file for the EcoInnovators Ideathon pipeline.
+Configuration file for the NeuralStack Ecoinnovators ideathon pipeline.
 Contains paths, constants, and settings.
 """
 
@@ -21,9 +21,20 @@ OUTPUT_OVERLAYS_DIR = OVERLAYS_DIR  # Path object
 LOGS_DIR = PROJECT_ROOT / "logs"
 
 # Model directories - Point to actual trained model files location
-MODEL_WEIGHTS_DIR = MAIN_PROJECT_ROOT / "trained_model_files"
-MODEL_PATH = MODEL_WEIGHTS_DIR / "solarpanel_seg_v1.pt"
+MODEL_WEIGHTS_DIR = MAIN_PROJECT_ROOT / "trained_model"
+MODEL_PATH = MODEL_WEIGHTS_DIR / "custommodelonmydataset.pt"
 MODEL_WEIGHTS_PATH = str(MODEL_PATH)  # String version for compatibility
+
+# Ensemble model paths for ADVANCED AI pipeline
+# Hybrid ensemble/adversarial + TTA + Multi-scale + Polygon refinement
+# Custom model + 4 other models = 5 models for maximum accuracy
+ENSEMBLE_MODELS = [
+    str(MODEL_WEIGHTS_DIR / "solarpanel_seg_v1.pt"),
+    str(MODEL_WEIGHTS_DIR / "solarpanel_seg_v2.pt"),
+    str(MODEL_WEIGHTS_DIR / "solarpanel_seg_v3.pt"),
+    str(MODEL_WEIGHTS_DIR / "solarpanel_seg_v4.pt"),
+    str(MODEL_WEIGHTS_DIR / "solarpanel_det_v4.pt"),  # Detection model for diversity
+]
 
 # Buffer zone settings (in square feet)
 BUFFER_ZONE_1 = 1200  # First buffer zone: 1200 sq.ft
@@ -34,6 +45,13 @@ IMAGE_SIZE_PX = 640  # Image size in pixels (640x640 for YOLOv8)
 IMAGE_FORMAT = "png"
 
 # Imagery fetch settings
+# Google Maps API configuration
+GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")  # Set via environment variable or paste here
+
+# Fallback to browser automation if API key not provided
+USE_API_IF_AVAILABLE = True
+
+# Image capture settings
 # Google Maps captures at 12,900 sq ft (max zoom 21 for highest detail)
 # Buffer zones (1200/2400 sqft) are filtered in pixel space during detection
 IMAGERY_FETCH_SIZE_M = 33.3  # ~12,900 sq ft = ~1,200 sq m = 33.3m x 33.3m

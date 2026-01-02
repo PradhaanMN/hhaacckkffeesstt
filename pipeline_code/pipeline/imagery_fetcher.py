@@ -1,15 +1,17 @@
 """
 Imagery fetcher for Google Maps Satellite imagery.
-Automated retrieval system - no API key required.
+Supports both Google Maps Static API (with API key) and browser automation fallback.
 """
 
 import time
 import logging
 import math
 import os
+import requests
 from pathlib import Path
 from typing import Dict, Optional
 from PIL import Image
+from io import BytesIO
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -21,11 +23,84 @@ from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from .config import (
     IMAGE_SIZE_PX,
     MAX_RETRIES,
-    RETRY_DELAY
+    RETRY_DELAY,
+    GOOGLE_MAPS_API_KEY,
+    USE_API_IF_AVAILABLE
 )
 from .buffer_geometry import compute_pixel_scale
 
 logger = logging.getLogger(__name__)
+
+
+def fetch_via_google_maps_api(
+    lat: float,
+    lon: float,
+    output_path: str,
+    zoom: int = 21,
+    size: str = "640x640",
+    map_type: str = "satellite"
+) -> Dict:
+    """
+    Fetch satellite imagery using Google Maps Static API.
+    
+    Args:
+        lat: Latitude
+        lon: Longitude
+        output_path: Path to save image
+        zoom: Zoom level (1-21, higher is closer)
+        size: Image size in format "widthxheight" (max 640x640 without premium)
+        map_type: Map type ('satellite', 'hybrid', 'roadmap')
+    
+    Returns:
+        Dict with success status and metadata
+    """
+    if not GOOGLE_MAPS_API_KEY:
+        return {"success": False, "error": "No API key configured"}
+    
+    logger.info(f"Fetching imagery via Google Maps Static API for lat={lat}, lon={lon}")
+    
+    # Construct API URL
+    base_url = "https://maps.googleapis.com/maps/api/staticmap"
+    params = {
+        "center": f"{lat},{lon}",
+        "zoom": zoom,
+        "size": size,
+        "maptype": map_type,
+        "key": GOOGLE_MAPS_API_KEY,
+        "format": "png"
+    }
+    
+    try:
+        response = requests.get(base_url, params=params, timeout=30)
+        
+        if response.status_code == 200:
+            # Save image
+            image = Image.open(BytesIO(response.content))
+            image.save(output_path)
+            
+            logger.info(f"✓ Successfully fetched imagery via API (zoom={zoom})")
+            
+            return {
+                "success": True,
+                "image_path": output_path,
+                "source": "Google Maps Static API",
+                "zoom_level": zoom,
+                "size": size,
+                "method": "api"
+            }
+        else:
+            error_msg = f"API returned status {response.status_code}"
+            if response.status_code == 403:
+                error_msg += " - Check API key and billing"
+            elif response.status_code == 400:
+                error_msg += " - Invalid parameters"
+            
+            logger.warning(f"API fetch failed: {error_msg}")
+            return {"success": False, "error": error_msg}
+            
+    except Exception as e:
+        logger.warning(f"API fetch failed: {str(e)}")
+        return {"success": False, "error": str(e)}
 
 
 def get_browser_driver():
@@ -300,13 +375,13 @@ def fetch_google_maps_satellite(
     out_path: str = None
 ) -> Dict:
     """
-    Fetch satellite imagery from Google Maps at maximum zoom level.
+    Fetch satellite imagery from Google Maps.
     
-    Uses automated retrieval system to capture imagery at zoom level 21 for highest detail.
-    Captures 12,900 sq ft area, then buffer filtering is applied in the detection 
-    pipeline based on the requested area_sqft parameter.
+    Tries Google Maps Static API first (if API key available), 
+    then falls back to browser automation if API unavailable.
     
-    No API key or authentication required. Suitable for academic/ideathon use.
+    Captures 12,900 sq ft area at zoom level 21 for highest detail.
+    Buffer filtering is applied in the detection pipeline.
     
     Args:
         lat: Latitude in degrees (WGS84)
@@ -325,7 +400,44 @@ def fetch_google_maps_satellite(
             - meters_per_pixel_x: horizontal resolution
             - meters_per_pixel_y: vertical resolution
             - error: error message if failed
+            - method: 'api' or 'browser' indicating fetch method
     """
+    # Try API first if available
+    if USE_API_IF_AVAILABLE and GOOGLE_MAPS_API_KEY:
+        logger.info("Attempting to fetch via Google Maps Static API...")
+        api_result = fetch_via_google_maps_api(
+            lat, lon,
+            output_path=out_path,
+            zoom=21,
+            size=f"{size_px}x{size_px}",
+            map_type="satellite"
+        )
+        
+        if api_result["success"]:
+            # Calculate ground resolution (same as browser method)
+            capture_area_sqft = 12900
+            capture_area_sqm = capture_area_sqft * 0.092903
+            side_length_m = math.sqrt(capture_area_sqm)
+            meters_per_pixel = side_length_m / size_px
+            
+            return {
+                "success": True,
+                "image_path": out_path,
+                "bbox": (lon - 0.001, lat - 0.001, lon + 0.001, lat + 0.001),
+                "ground_width_m": side_length_m,
+                "ground_height_m": side_length_m,
+                "meters_per_pixel_x": meters_per_pixel,
+                "meters_per_pixel_y": meters_per_pixel,
+                "error": None,
+                "method": "api",
+                "source": "Google Maps Static API"
+            }
+        else:
+            logger.info(f"API fetch failed ({api_result.get('error')}), falling back to browser automation...")
+    
+    # Fallback to browser automation
+    logger.info("Using browser automation for imagery capture...")
+    
     result = {
         "success": False,
         "image_path": None,
@@ -334,7 +446,8 @@ def fetch_google_maps_satellite(
         "ground_height_m": None,
         "meters_per_pixel_x": None,
         "meters_per_pixel_y": None,
-        "error": None
+        "error": None,
+        "method": "browser"
     }
     
     driver = None

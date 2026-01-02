@@ -1,0 +1,16 @@
+{
+  "sample_id": 1766767457659,
+  "lat": 12.283732,
+  "lon": 76.642062,
+  "has_solar": true,
+  "confidence": 0.8215,
+  "pv_area_sqm_est": 87.42,
+  "euclidean_distance_m_est": 0.04,
+  "buffer_radius_sqft": 1200,
+  "qc_status": "VERIFIABLE",
+  "bbox_or_mask": "[[0.0,0.0],[0.0,639.0],[639.0,639.0],[639.0,0.0]]",
+  "image_metadata": {
+    "source": "ArcGIS World_Imagery",
+    "capture_date": "UNKNOWN"
+  }
+}

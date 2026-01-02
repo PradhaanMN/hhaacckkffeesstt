@@ -13,6 +13,7 @@ shapely>=2.0.0
 
 # Automated Imagery Retrieval
 selenium>=4.0.0
+requests>=2.31.0  # For Google Maps Static API
 
 # Data Processing
 numpy>=1.24.0

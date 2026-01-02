@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="EcoInnovators Rooftop PV Detection API",
+    title="NeuralStack Rooftop PV Detection API",
     description="Governance-ready digital verification pipeline for PM Surya Ghar",
     version="1.0.0"
 )
@@ -76,25 +76,34 @@ def get_model():
         # Get the main project root
         main_root = Path(__file__).parent.parent.parent
         
-        # Define all ensemble models (3 segmentation + 1 detection)
+        # PRIMARY MODEL: Custom-trained model (solarpanel_seg_v1.pt)
+        # - Annotated and trained specifically for this project
+        # - Capable of both detection and segmentation
+        # - Given 2x weight in ensemble voting
+        # - Gets priority in confidence calculation
+        
+        # ENSEMBLE MODELS: Additional models for consensus voting
         ensemble_models = [
-            str(main_root / "trained_model_files" / "solarpanel_seg_v2.pt"),
-            str(main_root / "trained_model_files" / "solarpanel_seg_v3.pt"),
-            str(main_root / "trained_model_files" / "solarpanel_det_v4.pt")  # Detection-only model
+            str(main_root / "trained_model" / "solarpanel_seg_v2.pt"),
+            str(main_root / "trained_model" / "solarpanel_seg_v3.pt"),
+            str(main_root / "trained_model" / "solarpanel_seg_v4.pt"),
+            str(main_root / "trained_model" / "solarpanel_det_v4.pt")  # Detection-only model
         ]
         
         # Check which models exist
         available_models = [m for m in ensemble_models if Path(m).exists()]
         
         if available_models:
-            logger.info(f"Found {len(available_models)} additional ensemble models (segmentation + detection)")
+            logger.info(f"Found {len(available_models)} additional ensemble models")
+            for m in available_models:
+                logger.info(f"  - {Path(m).name}")
         
         # Initialize detector with ensemble
         model_instance = SolarPanelDetector(
             MODEL_WEIGHTS_PATH,
             ensemble_models=available_models if available_models else None
         )
-        logger.info(f"Ensemble loaded: {len(available_models) + 1} models with equal weighting")
+        logger.info(f"Ensemble loaded: {len(available_models) + 1} models (v1 + ensemble)")
     return model_instance
 
 
@@ -104,6 +113,7 @@ class LocationRequest(BaseModel):
     sample_id: int = Field(..., description="Unique sample identifier")
     latitude: float = Field(..., ge=-90, le=90, description="Latitude in decimal degrees")
     longitude: float = Field(..., ge=-180, le=180, description="Longitude in decimal degrees")
+    use_hybrid: bool = Field(True, description="Use hybrid ensemble algorithm (default: True)")
 
 
 class BatchLocationRequest(BaseModel):
@@ -142,13 +152,21 @@ class ErrorResponse(BaseModel):
     detail: Optional[str] = None
 
 
+class FeedbackRequest(BaseModel):
+    """User feedback for reinforcement learning"""
+    sample_id: str
+    rating: str  # 'good' or 'bad'
+    timestamp: str
+    satellite_image_available: Optional[bool] = False  # Track if satellite image exists
+
+
 @app.get("/")
 async def root():
     """Serve the frontend HTML"""
     html_file = Path(__file__).parent / "static" / "index.html"
     if html_file.exists():
         return FileResponse(html_file)
-    return {"message": "EcoInnovators Rooftop PV Detection API", "status": "running"}
+    return {"message": "NeuralStack Rooftop PV Detection API", "status": "running"}
 
 
 @app.get("/health")
@@ -192,14 +210,15 @@ async def verify_single_location(request: LocationRequest):
         detector = get_model()
         
         # Process the location using existing pipeline logic
-        logger.info(f"Processing location: sample_id={request.sample_id}, lat={request.latitude}, lon={request.longitude}")
+        logger.info(f"Processing location: sample_id={request.sample_id}, lat={request.latitude}, lon={request.longitude}, use_hybrid={request.use_hybrid}")
         
         result = process_single_location(
             sample_id=request.sample_id,
             lat=request.latitude,
             lon=request.longitude,
             detector=detector,
-            temp_dir=temp_dir
+            temp_dir=temp_dir,
+            use_hybrid=request.use_hybrid
         )
         
         # Write JSON to output
@@ -358,6 +377,91 @@ if outputs_path.exists():
     app.mount("/outputs", StaticFiles(directory=str(outputs_path)), name="outputs")
 
 
+@app.post("/api/feedback")
+async def submit_feedback(feedback: FeedbackRequest):
+    """
+    Collect user feedback for reinforcement learning
+    
+    This endpoint saves user ratings (thumbs up/down) for detected solar panels.
+    Only BAD ratings are saved with images for retraining purposes.
+    The feedback can be used to:
+    - Retrain models with corrected annotations
+    - Identify and fix false positives/negatives
+    - Improve detection accuracy over time
+    """
+    try:
+        # Create feedback directory structure
+        feedback_dir = Path(__file__).parent.parent / "outputs" / "feedback"
+        feedback_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create subdirectory only for bad images (for retraining)
+        images_bad_dir = feedback_dir / "images" / "bad"
+        images_bad_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save feedback to CSV file
+        feedback_file = feedback_dir / "user_feedback.csv"
+        
+        # Create file with header if it doesn't exist
+        if not feedback_file.exists():
+            with open(feedback_file, 'w') as f:
+                f.write("timestamp,sample_id,rating,overlay_path,satellite_path\n")
+        
+        # Only save images for BAD ratings (for retraining)
+        overlay_saved_path = None
+        satellite_saved_path = None
+        
+        if feedback.rating == "bad":
+            import shutil
+            timestamp_clean = feedback.timestamp.replace(':', '-').replace('.', '-')
+            
+            # Save overlay image
+            overlay_source = Path(__file__).parent.parent / "outputs" / "overlays" / f"{feedback.sample_id}_overlay.png"
+            if overlay_source.exists():
+                destination_file = images_bad_dir / f"{feedback.sample_id}_{timestamp_clean}_overlay.png"
+                shutil.copy2(overlay_source, destination_file)
+                overlay_saved_path = str(destination_file.relative_to(Path(__file__).parent.parent))
+                logger.info(f"Saved overlay for retraining: {overlay_saved_path}")
+            else:
+                logger.warning(f"Overlay image not found: {overlay_source}")
+                overlay_saved_path = "overlay_not_found"
+            
+            # Save raw satellite image (for retraining with original imagery)
+            satellite_source = Path("temp_images") / f"{feedback.sample_id}_satellite.png"
+            if satellite_source.exists():
+                destination_file = images_bad_dir / f"{feedback.sample_id}_{timestamp_clean}_satellite.png"
+                shutil.copy2(satellite_source, destination_file)
+                satellite_saved_path = str(destination_file.relative_to(Path(__file__).parent.parent))
+                logger.info(f"Saved raw satellite image for retraining: {satellite_saved_path}")
+            else:
+                logger.warning(f"Satellite image not found: {satellite_source}")
+                satellite_saved_path = "satellite_not_found"
+        else:
+            # Good rating - no images saved, just log the feedback
+            overlay_saved_path = "not_saved_good_rating"
+            satellite_saved_path = "not_saved_good_rating"
+        
+        # Append feedback with both image paths
+        with open(feedback_file, 'a') as f:
+            f.write(f"{feedback.timestamp},{feedback.sample_id},{feedback.rating},{overlay_saved_path},{satellite_saved_path}\n")
+        
+        logger.info(f"Feedback received: {feedback.sample_id} - {feedback.rating}")
+        
+        message = "Feedback with overlay and satellite images saved for retraining" if feedback.rating == "bad" else "Feedback recorded (images not saved for good ratings)"
+        
+        return {
+            "status": "success",
+            "message": message,
+            "sample_id": feedback.sample_id,
+            "rating": feedback.rating,
+            "overlay_saved": overlay_saved_path if feedback.rating == "bad" else None,
+            "satellite_saved": satellite_saved_path if feedback.rating == "bad" else None
+        }
+    
+    except Exception as e:
+        logger.error(f"Error saving feedback: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save feedback: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     
@@ -366,7 +470,7 @@ if __name__ == "__main__":
     Path(OUTPUT_PREDICTIONS_DIR).mkdir(parents=True, exist_ok=True)
     Path(OUTPUT_OVERLAYS_DIR).mkdir(parents=True, exist_ok=True)
     
-    logger.info("Starting EcoInnovators Rooftop PV Detection API...")
+    logger.info("Starting NeuralStack Rooftop PV Detection API...")
     logger.info(f"Model path: {MODEL_WEIGHTS_PATH}")
     logger.info(f"Output predictions: {OUTPUT_PREDICTIONS_DIR}")
     logger.info(f"Output overlays: {OUTPUT_OVERLAYS_DIR}")

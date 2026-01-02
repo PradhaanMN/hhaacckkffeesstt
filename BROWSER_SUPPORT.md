@@ -189,4 +189,4 @@ All browsers perform similarly for this use case. Choose based on what's already
 ---
 
 **Last Updated**: December 24, 2025  
-**System Version**: EcoInnovators Ideathon 2026
+**System Version**: NeuralStack Ecoinnovators ideathon 2026

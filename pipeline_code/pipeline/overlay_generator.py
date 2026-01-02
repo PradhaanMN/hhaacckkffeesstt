@@ -154,6 +154,11 @@ def draw_split_polygon(
         # Create shapely polygon from detection
         panel_poly = Polygon(polygon)
         
+        # Ensure polygon is valid
+        if not panel_poly.is_valid:
+            logger.warning(f"Invalid polygon, attempting to fix...")
+            panel_poly = panel_poly.buffer(0)  # Fix self-intersections
+        
         # Create circular buffer zone
         buffer_circle = Point(center[0], center[1]).buffer(radius)
         
@@ -163,17 +168,7 @@ def draw_split_polygon(
         # Clip polygon: part outside buffer
         outside_part = panel_poly.difference(buffer_circle)
         
-        # Draw inside part (GREEN)
-        if not inside_part.is_empty:
-            if inside_part.geom_type == 'Polygon':
-                coords = list(inside_part.exterior.coords)
-                draw_polygon(image, coords, color_inside, thickness, filled, alpha)
-            elif inside_part.geom_type == 'MultiPolygon':
-                for poly in inside_part.geoms:
-                    coords = list(poly.exterior.coords)
-                    draw_polygon(image, coords, color_inside, thickness, filled, alpha)
-        
-        # Draw outside part (RED)
+        # Draw OUTSIDE part FIRST (RED) - so it appears underneath
         if not outside_part.is_empty:
             if outside_part.geom_type == 'Polygon':
                 coords = list(outside_part.exterior.coords)
@@ -182,9 +177,19 @@ def draw_split_polygon(
                 for poly in outside_part.geoms:
                     coords = list(poly.exterior.coords)
                     draw_polygon(image, coords, color_outside, thickness, filled, alpha)
+        
+        # Draw INSIDE part SECOND (GREEN) - so it appears on top
+        if not inside_part.is_empty:
+            if inside_part.geom_type == 'Polygon':
+                coords = list(inside_part.exterior.coords)
+                draw_polygon(image, coords, color_inside, thickness, filled, alpha)
+            elif inside_part.geom_type == 'MultiPolygon':
+                for poly in inside_part.geoms:
+                    coords = list(poly.exterior.coords)
+                    draw_polygon(image, coords, color_inside, thickness, filled, alpha)
     
     except Exception as e:
-        logger.warning(f"Failed to split polygon: {e}. Drawing as single color.")
+        logger.error(f"Failed to split polygon: {e}. Drawing as single color.")
         # Fallback: determine color by centroid
         centroid_x = np.mean([p[0] for p in polygon])
         centroid_y = np.mean([p[1] for p in polygon])
@@ -351,63 +356,124 @@ def create_overlay_image(
             bbox = detection.get("bbox", [])
             confidence = detection.get("confidence", 0)
             
-            if not polygon:
+            if not polygon or len(polygon) < 3:
                 continue
             
-            # Draw polygon split by buffer zone
-            # Green inside, Red outside
-            draw_split_polygon(
-                image,
-                polygon,
-                center,
-                active_radius,
-                color_inside=(0, 255, 0),   # Green (BGR)
-                color_outside=(0, 0, 255),  # Red (BGR)
-                thickness=2,
-                filled=True,
-                alpha=0.3
-            )
+            # Calculate what portion is inside buffer
+            from shapely.geometry import Polygon, Point
+            from shapely import validation
+            
+            split_success = False
+            try:
+                # Create and validate polygon
+                panel_poly = Polygon(polygon)
+                if not panel_poly.is_valid:
+                    logger.warning(f"Invalid polygon detected, attempting fix...")
+                    panel_poly = panel_poly.buffer(0)
+                
+                # Create buffer circle
+                buffer_circle = Point(center[0], center[1]).buffer(active_radius)
+                
+                # Calculate intersections
+                inside_part = panel_poly.intersection(buffer_circle)
+                outside_part = panel_poly.difference(buffer_circle)
+                
+                # Draw OUTSIDE part FIRST - OUTLINE ONLY (no fill) in RED
+                if not outside_part.is_empty:
+                    if outside_part.geom_type == 'Polygon':
+                        coords = list(outside_part.exterior.coords)
+                        if len(coords) >= 3:
+                            draw_polygon(image, coords, (0, 0, 255), thickness=3, filled=False, alpha=0)
+                    elif outside_part.geom_type in ['MultiPolygon', 'GeometryCollection']:
+                        for geom in outside_part.geoms:
+                            if geom.geom_type == 'Polygon':
+                                coords = list(geom.exterior.coords)
+                                if len(coords) >= 3:
+                                    draw_polygon(image, coords, (0, 0, 255), thickness=3, filled=False, alpha=0)
+                
+                # Draw INSIDE part SECOND - FILLED in GREEN (on top)
+                if not inside_part.is_empty:
+                    if inside_part.geom_type == 'Polygon':
+                        coords = list(inside_part.exterior.coords)
+                        if len(coords) >= 3:
+                            draw_polygon(image, coords, (0, 255, 0), thickness=2, filled=True, alpha=0.5)
+                    elif inside_part.geom_type in ['MultiPolygon', 'GeometryCollection']:
+                        for geom in inside_part.geoms:
+                            if geom.geom_type == 'Polygon':
+                                coords = list(geom.exterior.coords)
+                                if len(coords) >= 3:
+                                    draw_polygon(image, coords, (0, 255, 0), thickness=2, filled=True, alpha=0.5)
+                
+                # Calculate inside ratio for bbox color
+                inside_area = inside_part.area if not inside_part.is_empty else 0
+                total_area = panel_poly.area
+                inside_ratio = inside_area / total_area if total_area > 0 else 0
+                
+                split_success = True
+                
+                # Color bbox based on how much is inside (green or red only)
+                if inside_ratio > 0.5:
+                    # More than half inside - GREEN bbox
+                    bbox_color = (0, 255, 0)
+                    label = f"Solar {confidence:.0%}"
+                    thickness_val = 3
+                else:
+                    # More than half outside - RED bbox
+                    bbox_color = (0, 0, 255)
+                    label = f"{confidence:.0%}"
+                    thickness_val = 2
+                    
+            except Exception as e:
+                logger.error(f"Polygon split failed: {e}")
+                split_success = False
+            
+            if not split_success:
+                # Fallback: use centroid to determine if inside/outside
+                centroid_x = np.mean([p[0] for p in polygon])
+                centroid_y = np.mean([p[1] for p in polygon])
+                distance = np.sqrt((centroid_x - center[0])**2 + (centroid_y - center[1])**2)
+                
+                if distance <= active_radius:
+                    # Inside - green filled
+                    draw_polygon(image, polygon, (0, 255, 0), thickness=2, filled=True, alpha=0.5)
+                    bbox_color = (0, 255, 0)
+                    label = f"Solar {confidence:.0%}"
+                    thickness_val = 3
+                else:
+                    # Outside - red outline only
+                    draw_polygon(image, polygon, (0, 0, 255), thickness=3, filled=False, alpha=0)
+                    bbox_color = (0, 0, 255)
+                    label = f"{confidence:.0%}"
+                    thickness_val = 2
             
             # Draw bounding box
-            # Determine bbox color by centroid location
-            centroid_x = np.mean([p[0] for p in polygon])
-            centroid_y = np.mean([p[1] for p in polygon])
-            distance = np.sqrt((centroid_x - center[0])**2 + (centroid_y - center[1])**2)
-            
-            if distance <= active_radius:
-                # Mostly inside - green bbox
-                bbox_color = (0, 255, 0)  # Green
-                label = f"Solar {confidence:.0%}"
-                thickness = 3
-            else:
-                # Mostly outside - red bbox
-                bbox_color = (0, 0, 255)  # Red
-                label = f"{confidence:.0%}"
-                thickness = 2
-            
             if bbox and len(bbox) >= 4:
-                draw_bbox(image, bbox, bbox_color, thickness=thickness, label=label)
+                draw_bbox(image, bbox, bbox_color, thickness=thickness_val, label=label)
         
         # Add comprehensive legend with background
-        legend_height = 160
-        cv2.rectangle(image, (5, 5), (520, legend_height), (0, 0, 0), -1)
-        cv2.rectangle(image, (5, 5), (520, legend_height), (255, 255, 255), 2)
+        legend_height = 180
+        cv2.rectangle(image, (5, 5), (560, legend_height), (0, 0, 0), -1)
+        cv2.rectangle(image, (5, 5), (560, legend_height), (255, 255, 255), 2)
         
         legend_y = 25
-        cv2.putText(image, "GREEN: Panel area INSIDE buffer zone", (10, legend_y),
+        cv2.putText(image, "GREEN Fill: Panel area INSIDE buffer zone", (10, legend_y),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         
-        legend_y += 20
-        cv2.putText(image, "RED: Panel area OUTSIDE buffer zone", (10, legend_y),
+        legend_y += 22
+        cv2.putText(image, "RED Outline: Panel area OUTSIDE buffer zone", (10, legend_y),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
         
-        legend_y += 20
-        cv2.putText(image, "(Panels split by buffer boundary)", (10, legend_y),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+        legend_y += 22
+        cv2.putText(image, "(Each panel split at buffer boundary)", (10, legend_y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
         
-        legend_y += 20
+        legend_y += 22
         cv2.putText(image, f"YELLOW CIRCLE: Active buffer ({buffer_sqft} sq.ft)", (10, legend_y),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+        
+        legend_y += 22
+        cv2.putText(image, "Area calculation: ONLY green portions counted", (10, legend_y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
         
         legend_y += 20
         inactive_buffer = "2400" if buffer_sqft == 1200 else "1200"

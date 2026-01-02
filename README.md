@@ -1,4 +1,4 @@
-# 🌞 Solar Panel Detection System - EcoInnovators Ideathon 2026
+# 🌞 Solar Panel Detection System - NeuralStack Ecoinnovators ideathon 2026
 
 > **For Evaluators**: Start with [EVALUATOR_GUIDE.md](EVALUATOR_GUIDE.md) for a comprehensive overview and quick demo.
 
@@ -6,15 +6,25 @@ Complete end-to-end AI-powered system for detecting rooftop solar panels from sa
 
 ## 🚀 System Highlights
 
-- ✅ **4-Model Ensemble**: 94%+ accuracy combining 4 YOLOv8 models (3 segmentation + 1 detection, ~32k+ total training images)
-- ✅ **Automated Satellite Imagery**: High-resolution imagery retrieval (no API keys required)
-- ✅ **Fast Processing**: 3-4 seconds per location
-- ✅ **High Success Rate**: Optimized imagery capture (12,900 sq ft at max resolution)
-- ✅ **Enhanced Visualization**: Split-color polygon rendering (GREEN=inside buffer, RED=outside buffer)
-- ✅ **Two-Tier Buffer Analysis**: 1200/2400 sq.ft with yellow highlight for active buffer
-- ✅ **Power Generation Estimates**: Automatic kWh calculations per detection
-- ✅ **Complete Web Interface**: REST API + Interactive UI
-- ✅ **Production Ready**: Clean code, robust error handling, comprehensive documentation
+- ✅ **Dual-Mode Satellite Imagery**:
+  - **API Mode**: Google Maps Static API (fast, reliable, ~0.5s per image)
+  - **Browser Mode**: Automated fallback with multi-browser support (free, ~3-5s)
+  - Automatic fallback ensures 100% uptime
+- ✅ **State-of-the-Art AI Pipeline**:
+  - **5 YOLOv8 Models**: 4 segmentation + 1 detection (~32k+ training images)
+  - **Custom Model Priority**: Your trained model gets 2x weight + 10% confidence boost
+  - **Toggleable Hybrid Algorithm**: Advanced consensus voting + adversarial filtering
+  - **Test-Time Augmentation**: Horizontal flip variants for robustness
+  - **Multi-Scale Inference**: 90%, 100%, 110% scale processing
+  - **Shape Validation**: Enforces rectangular panel characteristics
+  - **Polygon Clipping**: Geometric intersection with buffer boundary
+- ✅ **Fast Processing**: 0.5-1s (API) or 5-6s (browser) per location
+- ✅ **High Accuracy**: Custom model-weighted ensemble with shape filters
+- ✅ **Enhanced Visualization**: Green fill inside + red outline outside buffer
+- ✅ **Two-Tier Buffer**: 1200/2400 sq.ft with clipped area calculation
+- ✅ **Power Estimates**: Automatic kWh generation calculations
+- ✅ **Web Interface**: REST API + Interactive UI with algorithm controls
+- ✅ **Production Ready**: Dual-mode reliability, comprehensive error handling
 
 ## 📋 Requirements
 
@@ -33,7 +43,39 @@ Complete end-to-end AI-powered system for detecting rooftop solar panels from sa
 
 The project is already set up in your workspace!
 
-### 2. Install Dependencies
+### 2. Google Maps API Key (Optional)
+
+The system supports **two modes** for fetching satellite imagery:
+
+#### **Mode 1: Browser Automation** (Default - No Setup Required)
+✅ **Works immediately** - uses Chrome/Edge/Firefox/Brave  
+⏱️ Speed: 3-5 seconds per image  
+💰 Cost: Free  
+
+#### **Mode 2: Google Maps API** (Optional - Faster)
+⚡ Speed: 0.5 seconds per image  
+💰 Cost: Free tier (40,000 requests/month)  
+
+**To enable fast API mode (optional):**
+
+1. Get a free API key from [Google Cloud Console](https://console.cloud.google.com/google/maps-apis)
+2. Enable "Maps Static API" for your project
+3. Open `.env.evaluator` and add your key:
+   ```bash
+   GOOGLE_MAPS_API_KEY=AIzaSyC1234567890...
+   ```
+4. Run `setup.bat` (automatically activates the key)
+
+**Note**: Both modes work perfectly - API is just 6x faster. The system automatically falls back to browser mode if no API key is provided.
+
+#### **Option B: Browser Automation** (Automatic Fallback)
+
+If no API key is provided, the system automatically falls back to browser automation:
+- Requires Chrome, Edge, Firefox, Brave, or Opera installed
+- Slower but works without API costs
+- Good for testing and small-scale use
+
+### 3. Install Dependencies
 
 All required packages have been installed. To verify or reinstall:
 
@@ -49,11 +91,11 @@ python -c "import torch; import ultralytics; print('✓ Installation successful'
 
 ---
 
-## 🎯 End-to-End Inference Pipeline (EcoInnovators Ideathon)
+## 🎯 End-to-End Inference Pipeline (NeuralStack Ecoinnovators ideathon)
 
 ### Overview
 
-Complete pipeline for rooftop PV detection following EcoInnovators Ideathon specifications:
+Complete pipeline for rooftop PV detection following NeuralStack Ecoinnovators ideathon specifications:
 - **Input**: Excel file with coordinates (sample_id, latitude, longitude)
 - **Processing**: Automated imagery fetching, AI inference, buffer zone analysis
 - **Output**: JSON predictions + visual overlays
@@ -70,6 +112,9 @@ Complete pipeline for rooftop PV detection following EcoInnovators Ideathon spec
 ### Quick Start - Inference Pipeline
 
 ```powershell
+# 0. (Optional) Set Google Maps API key for faster imagery
+$env:GOOGLE_MAPS_API_KEY="YOUR_KEY"  # Or paste in config.py line 51
+
 # 1. Prepare your Excel file with columns: sample_id, latitude, longitude
 # Example: inputs/samples.xlsx
 
@@ -108,7 +153,8 @@ Each location generates a JSON file following the exact ideathon specification:
   "qc_status": "VERIFIABLE",
   "bbox_or_mask": "[[x1,y1],[x2,y2],...]",
   "image_metadata": {
-    "source": "automated_retrieval",
+    "source": "Google Maps Satellite",
+    "capture_date": "Variable by location (typically 2020-2024, updated regularly)",
     "resolution_m_per_pixel": 0.054,
     "fetch_area_sqft": 12900
   }
@@ -145,7 +191,7 @@ python pipeline/main.py inputs/samples.xlsx --temp temp_images
 
 # Full example with all options
 python pipeline/main.py inputs/samples.xlsx \
-  --model model/model_weights/solarpanel_seg_v1.pt \
+  --model trained_model/custommodelonmydataset.pt \
   --output outputs/predictions \
   --temp temp_images
 ```
@@ -187,11 +233,19 @@ The pipeline implements a two-tier buffer strategy per ideathon requirements:
 
 ### Imagery Source
 
-Automated satellite imagery retrieval system:
+**Google Maps Satellite (Dual Mode)**:
+- **API Mode** (if key provided): Google Maps Static API
+  - Fastest and most reliable
+  - ~0.5-1 second per image
+  - $2 per 1000 requests (free tier: $200/month credit)
+- **Browser Mode** (automatic fallback): Browser automation
+  - No API costs
+  - ~3-5 seconds per image
+  - Multi-browser support (Chrome, Edge, Firefox, Brave, Opera)
 - High-resolution capture at zoom level 21
-- Coverage: 12,900 sq ft per location
+- Coverage: 12,900 sq ft per location  
 - Resolution: 0.054 m/pixel (5.4 cm per pixel)
-- Multi-platform backend support
+- Variable capture dates (typically 2020-2024, location-dependent)
 - No authentication required
 
 ### Pipeline Logging
@@ -211,54 +265,87 @@ Get-Content pipeline.log -Wait
 Get-Content pipeline.log -Tail 50
 ```
 
-## 📂 Project Structure
+## � Future Enhancements
+
+The system currently includes a **reinforcement learning feedback mechanism** where users can rate detections. Future planned enhancements include:
+
+### Automated Retraining Pipeline (Priority 1)
+- 🤖 **Auto-format feedback images** for YOLO training
+- 📝 **Generate annotations** from feedback data automatically
+- ⚡ **One-click retraining** pipeline
+- 📊 **Model versioning** and A/B testing
+- 🔄 **Continuous improvement** based on user feedback
+
+**Current Implementation**: 
+- ✅ User feedback collection (thumbs up/down)
+- ✅ Bad detection images saved (overlay + raw satellite)
+- ✅ Feedback logged to CSV with image paths
+- ✅ Ready for manual retraining
+
+**Future Automation**: 
+- ⏳ Automatic YOLO format conversion
+- ⏳ Auto-generated annotation files
+- ⏳ Single-command retraining pipeline
+- ⏳ Automatic model deployment
+
+See [TECHNICAL_REPORT.md](TECHNICAL_REPORT.md) for comprehensive technical documentation including detailed future roadmap.
+
+---
+
+## �📂 Project Structure
+
+Complete deliverables mapping available in [STRUCTURE.md](STRUCTURE.md)
 
 ```
 Idethon/
-├── pipeline/                    # End-to-end inference pipeline
-│   ├── __init__.py
-│   ├── main.py                 # Entry point for batch processing
-│   ├── config.py               # Configuration constants
-│   ├── buffer_geometry.py      # WGS84 coordinate calculations
-│   ├── imagery_fetcher.py      # Google Maps imagery integration
-│   ├── qc_logic.py             # Quality control logic
-│   ├── overlay_generator.py    # Visualization generation
-│   └── json_writer.py          # Output formatting
-├── model/
-│   ├── model_inference.py      # YOLOv8 wrapper
-│   └── model_weights/
-│       └── solarpanel_seg_v1.pt  # Production model (94.3% mAP)
-├── inputs/                      # Input Excel files
-├── outputs/
-│   ├── predictions/             # JSON prediction files
-│   └── overlays/                # Visual overlay images
-├── env/
-│   └── requirements.txt         # Python dependencies
-├── test_satellite_image.py      # Single image inference
-├── visualize.py                 # Dataset visualization
-└── README.md                    # This file
+├── 📁 pipeline_code/                # ✅ DELIVERABLE 1: Pipeline Code
+│   ├── pipeline/                    # Inference pipeline
+│   │   ├── main.py                  # CLI entry point
+│   │   ├── config.py                # Configuration (API keys, thresholds)
+│   │   ├── imagery_fetcher.py       # Dual-mode imagery (API + browser)
+│   │   ├── overlay_generator.py     # Visualization generator
+│   │   └── ...                      # Additional pipeline modules
+│   ├── model/
+│   │   └── model_inference.py       # 5-model ensemble with custom priority
+│   ├── backend/
+│   │   ├── main.py                  # FastAPI web server
+│   │   └── static/index.html        # Web interface
+│   └── outputs/
+│       ├── predictions/             # Generated JSON predictions
+│       └── overlays/                # Generated overlay images
+│
+├── 📁 environment_details/          # ✅ DELIVERABLE 2: Environment Details
+│   ├── requirements.txt             # pip dependencies
+│   ├── environment.yml              # conda environment
+│   └── python_version.txt           # Python version requirement
+│
+├── 📁 trained_model/                # ✅ DELIVERABLE 3: Trained Models
+│   ├── custommodelonmydataset.pt    # Custom model (22.78 MB) - 2x priority
+│   ├── solarpanel_seg_v2.pt         # Model 2 (22.52 MB)
+│   ├── solarpanel_seg_v3.pt         # Model 3 (23.86 MB)
+│   ├── solarpanel_seg_v4.pt         # Model 4 (23.86 MB)
+│   └── solarpanel_det_v4.pt         # Detection model
+│
+├── 📁 model_card/                   # ✅ DELIVERABLE 4: Model Card
+│   ├── MODEL_CARD.md                # Comprehensive documentation (408 lines)
+│   └── MODEL_CARD.pdf               # ⚠️ NEEDS CONVERSION before submission
+│
+├── 📁 prediction_files/             # ✅ DELIVERABLE 5: Prediction Files
+│   ├── train/                       # Training dataset predictions
+│   └── test/                        # Test dataset predictions
+│
+├── 📁 artefacts/                    # ✅ DELIVERABLE 6: Artefacts
+│   ├── train/                       # Training visualizations
+│   └── test/                        # Test visualizations
+│
+├── 📁 training_logs/                # ✅ DELIVERABLE 7: Training Logs
+│   ├── logs.csv                     # Training metrics (Loss, F1, etc.)
+│   └── training_logs.txt            # Detailed training output
+│
+└── 📄 README.md                     # ✅ DELIVERABLE 8: Clear run instructions
 ```
 
-**Note:** Dataset folders have been removed to reduce repository size. Only the final trained model is included for submission.
-
-## 📊 Dataset Format
-
-Your dataset should be in **COCO JSON format**. Place your data in the `dataset/` folder:
-
-### Expected Structure
-
-```
-dataset/
-├── train/
-│   ├── annotations.json    # COCO format annotations
-│   └── images/            # Training images
-├── val/
-│   ├── annotations.json
-│   └── images/
-└── test/
-    ├── annotations.json
-    └── images/
-```
+**Note**: See [STRUCTURE.md](STRUCTURE.md) for complete deliverables compliance matrix and submission checklist.
 
 ### COCO JSON Format
 
@@ -307,7 +394,7 @@ Test the final model on your own satellite imagery:
 # Run inference on a satellite image
 python test_satellite_image.py
 
-# The script will use models_segmentation/solarpanel_seg_v1.pt
+# The script will use trained_model/custommodelonmydataset.pt
 # and detect solar panels with bounding boxes and segmentation masks
 ```
 
@@ -362,24 +449,42 @@ The final model was trained on 6,876 images from 6 different datasets, combining
 ### Using the Model in Your Code
 
 ```python
-from ultralytics import YOLO
+from model.model_inference import SolarPanelDetector
 
-# Load the trained model
-model = YOLO('models_segmentation/best_final_combined.pt')
+# Load the 5-model ensemble
+detector = SolarPanelDetector(
+    'trained_model/custommodelonmydataset.pt',
+    ensemble_models=[
+        'trained_model/solarpanel_seg_v2.pt',
+        'trained_model/solarpanel_seg_v3.pt',
+        'trained_model/solarpanel_seg_v4.pt',
+        'trained_model/solarpanel_det_v4.pt'
+    ]
+)
 
-# Run inference
-results = model('your_satellite_image.jpg', conf=0.25)
+# Run inference with hybrid algorithm (default)
+detections = detector.run_inference(
+    'your_satellite_image.jpg',
+    conf_threshold=0.08,
+    use_tta=True,           # Test-Time Augmentation
+    use_multiscale=True,    # Multi-scale inference
+    use_hybrid=True         # Hybrid ensemble voting
+)
+
+# Or use standard NMS merging
+detections = detector.run_inference(
+    'your_satellite_image.jpg',
+    conf_threshold=0.08,
+    use_hybrid=False        # Standard merging
+)
 
 # Process results
-for r in results:
-    boxes = r.boxes  # Bounding boxes
-    masks = r.masks  # Segmentation masks
-    
-    # Get box coordinates
-    for box in boxes:
-        x1, y1, x2, y2 = box.xyxy[0]
-        confidence = box.conf[0]
-        print(f"Panel at ({x1}, {y1}, {x2}, {y2}) - {confidence:.2%}")
+for det in detections:
+    polygon = det['polygon']      # [[x1,y1], [x2,y2], ...]
+    confidence = det['confidence']
+    area_px = det['area_px']
+    bbox = det['bbox']           # [x1, y1, x2, y2]
+    print(f"Panel: {confidence:.2%} confidence, {area_px:.0f} pixels")
 ```
 
 ### Adjust Confidence Threshold

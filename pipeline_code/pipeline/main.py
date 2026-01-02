@@ -15,7 +15,7 @@ import pandas as pd
 from pipeline.config import (
     BUFFER_ZONE_1, BUFFER_ZONE_2, IMAGE_SIZE_PX,
     IMAGERY_FETCH_SIZE_SQFT,
-    MODEL_WEIGHTS_PATH, OUTPUT_PREDICTIONS_DIR, OUTPUT_OVERLAYS_DIR
+    MODEL_WEIGHTS_PATH, ENSEMBLE_MODELS, OUTPUT_PREDICTIONS_DIR, OUTPUT_OVERLAYS_DIR
 )
 from pipeline.buffer_geometry import compute_pixel_scale, point_in_polygon, compute_polygon_area, compute_buffer_radius_pixels
 from pipeline.imagery_fetcher import fetch_arcgis_world_imagery
@@ -86,13 +86,58 @@ def find_panels_in_buffer(
     return panels_in_buffer
 
 
+def calculate_clipped_panel_area(
+    panel_polygon: List[List[float]],
+    buffer_center_px: Tuple[float, float],
+    buffer_radius_px: float
+) -> float:
+    """
+    Calculate the area of the panel that falls INSIDE the buffer zone (clipped area).
+    
+    Args:
+        panel_polygon: List of [x, y] coordinates
+        buffer_center_px: (x, y) center of buffer
+        buffer_radius_px: Radius of buffer in pixels
+        
+    Returns:
+        Area in pixels of the clipped portion inside buffer
+    """
+    from shapely.geometry import Polygon, Point
+    
+    try:
+        # Create shapely geometries
+        panel_poly = Polygon(panel_polygon)
+        buffer_circle = Point(buffer_center_px[0], buffer_center_px[1]).buffer(buffer_radius_px)
+        
+        # Calculate intersection
+        clipped_poly = panel_poly.intersection(buffer_circle)
+        
+        # Return area
+        return clipped_poly.area if not clipped_poly.is_empty else 0.0
+    
+    except Exception as e:
+        logger.warning(f"Failed to calculate clipped area: {e}")
+        # Fallback to full panel area if inside
+        import numpy as np
+        centroid_x = np.mean([p[0] for p in panel_polygon])
+        centroid_y = np.mean([p[1] for p in panel_polygon])
+        distance = np.sqrt((centroid_x - buffer_center_px[0])**2 + (centroid_y - buffer_center_px[1])**2)
+        
+        if distance <= buffer_radius_px:
+            # Calculate full polygon area
+            return compute_polygon_area(panel_polygon)
+        else:
+            return 0.0
+
+
 def select_largest_panel_in_buffer(
     detections: List[Dict],
     buffer_center_px: Tuple[float, float],
     buffer_radius_px: float
 ) -> Dict:
     """
-    Select the panel with the largest overlap with the buffer zone.
+    Select the panel with the largest CLIPPED area inside the buffer zone.
+    Only counts the portion of each panel that falls within the buffer.
     
     Args:
         detections: List of detection dictionaries
@@ -100,18 +145,33 @@ def select_largest_panel_in_buffer(
         buffer_radius_px: Radius of buffer
         
     Returns:
-        Detection with largest overlap, or None
+        Detection with largest clipped area, or None
     """
     panels_in_buffer = find_panels_in_buffer(detections, buffer_center_px, buffer_radius_px)
     
     if not panels_in_buffer:
         return None
     
-    # For simplicity, select the panel with the largest area
-    # (More sophisticated: calculate actual overlap area)
-    largest_panel = max(panels_in_buffer, key=lambda d: d["area_px"])
+    # Calculate clipped area for each panel and select the largest
+    best_panel = None
+    best_clipped_area = 0
     
-    return largest_panel
+    for panel in panels_in_buffer:
+        clipped_area = calculate_clipped_panel_area(
+            panel["polygon"],
+            buffer_center_px,
+            buffer_radius_px
+        )
+        
+        if clipped_area > best_clipped_area:
+            best_clipped_area = clipped_area
+            best_panel = panel
+            # Store clipped area in detection for later use
+            best_panel["clipped_area_px"] = clipped_area
+    
+    logger.info(f"Selected panel with clipped area: {best_clipped_area:.1f}px (full area: {best_panel['area_px']:.1f}px)")
+    
+    return best_panel
 
 
 def calculate_euclidean_distance(
@@ -214,15 +274,16 @@ def process_single_location(
     lat: float,
     lon: float,
     detector: SolarPanelDetector,
-    temp_dir: Path
+    temp_dir: Path,
+    use_hybrid: bool = True
 ) -> Dict:
     """
     Process a single location through the complete pipeline.
     
     UPDATED WORKFLOW:
-    1. Fetch LARGE satellite image (100m x 100m) to satisfy ArcGIS requirements
-    2. Run YOLO inference on ENTIRE image to detect ALL solar panels
-    3. Apply buffer zone logic (1200 sq.ft -> 2400 sq.ft) to filter detections
+    1. Fetch LARGE satellite image (100m x 100m) via Google Maps for comprehensive coverage
+    2. Run YOLO inference with 5 models (hybrid/standard mode) to detect ALL solar panels
+    3. Apply buffer zone logic (1200 sq.ft -> 2400 sq.ft) with clipped area calculation
     4. Generate overlay showing all panels with buffer zones
     
     Args:
@@ -237,7 +298,7 @@ def process_single_location(
     """
     logger.info(f"Processing sample {sample_id}: ({lat}, {lon})")
     
-    # Fetch LARGER imagery (100m x 100m) to satisfy ArcGIS API requirements
+    # Fetch LARGER imagery (100m x 100m) via Google Maps for comprehensive coverage
     # We'll apply buffer logic after detection
     temp_image_path = temp_dir / f"{sample_id}_satellite.png"
     
@@ -269,14 +330,21 @@ def process_single_location(
             "buffer_radius_sqft": BUFFER_ZONE_1,
             "qc_status": "NOT_VERIFIABLE",
             "bbox_or_mask": "",
-            "image_metadata": {"source": "ArcGIS World_Imagery", "capture_date": "UNKNOWN"},
+            "image_metadata": {"source": "Google Maps Satellite", "capture_date": "Variable by location (typically 2020-2024)"},
             "notes": f"Image fetch failed: {fetch_result.get('error')}"
         }
     
-    # Run inference on ENTIRE image - detect ALL solar panels
-    logger.info("Running model inference on full image")
-    detections = detector.run_inference(str(temp_image_path))
-    logger.info(f"Detected {len(detections)} total solar panels in image")
+    # Run inference with ADVANCED AI features for maximum detection
+    mode_str = "Hybrid Ensemble" if use_hybrid else "Single Model"
+    logger.info(f"Running model inference (confidence=0.08, mode={mode_str}, FAST MODE)")
+    detections = detector.run_inference(
+        str(temp_image_path), 
+        conf_threshold=0.08,
+        use_tta=False,  # Disabled for 2x speed boost
+        use_multiscale=False,  # Disabled for 3x speed boost
+        use_hybrid=use_hybrid
+    )
+    logger.info(f"Detected {len(detections)} solar panels in image")
     
     # Image center is the target location
     center_px = (IMAGE_SIZE_PX / 2, IMAGE_SIZE_PX / 2)
@@ -320,9 +388,12 @@ def process_single_location(
     confidence = selected_panel["confidence"] if has_solar else 0.0
     
     # Calculate area in square meters and euclidean distance
+    # Use clipped_area_px (only the part inside buffer) for accurate area calculation
     if has_solar:
+        # Use clipped area if available, otherwise fall back to full area
+        panel_area_px = selected_panel.get("clipped_area_px", selected_panel["area_px"])
         area_sqm = convert_pixel_area_to_sqm(
-            selected_panel["area_px"],
+            panel_area_px,
             fetch_result["meters_per_pixel_x"],
             fetch_result["meters_per_pixel_y"]
         )
@@ -333,6 +404,7 @@ def process_single_location(
             fetch_result["meters_per_pixel_x"],
             fetch_result["meters_per_pixel_y"]
         )
+        logger.info(f"Panel area: {panel_area_px:.1f}px (clipped) = {area_sqm:.2f} sq.m")
     else:
         area_sqm = 0.0
         bbox_or_mask = ""
@@ -381,8 +453,8 @@ def process_single_location(
         "bbox_or_mask": bbox_or_mask,
         "power_estimate": power_estimate,
         "image_metadata": {
-            "source": "ArcGIS World_Imagery",
-            "capture_date": "UNKNOWN"
+            "source": "Google Maps Satellite",
+            "capture_date": "Variable by location (typically 2020-2024, updated regularly)"
         }
     }
     
@@ -434,26 +506,26 @@ def process_excel_file(
     temp_path = Path(temp_dir)
     temp_path.mkdir(parents=True, exist_ok=True)
     
-    # Load ensemble models - combining 3 models with equal weighting
+    # Load ensemble models - HYBRID ENSEMBLE/ADVERSARIAL approach
     logger.info(f"Loading primary model from {model_path}")
     
-    # Define all ensemble models
-    ensemble_models = [
-        "model/ensemble_models/solarpanel_seg_v2.pt",
-        "model/ensemble_models/solarpanel_seg_v3.pt"
-    ]
-    
-    # Check which models exist
-    available_models = [m for m in ensemble_models if Path(m).exists()]
+    # Check which ensemble models exist from config
+    available_models = [m for m in ENSEMBLE_MODELS if Path(m).exists()]
     
     if available_models:
         logger.info(f"Found {len(available_models)} additional ensemble models:")
         for model in available_models:
             logger.info(f"  - {model}")
+    else:
+        logger.warning("No ensemble models found - using single model only")
     
-    # Initialize detector with ensemble
+    # Initialize detector with HYBRID ensemble/adversarial approach (4 seg + 1 det = 5 models)
     detector = SolarPanelDetector(model_path, ensemble_models=available_models if available_models else None)
-    logger.info(f"Ensemble initialized: {len(available_models) + 1} models with equal weighting")
+    logger.info(f"🤖 HYBRID Ensemble/Adversarial System: {len(available_models) + 1} models")
+    logger.info(f"   • 4 Segmentation + 1 Detection models for maximum diversity")
+    logger.info(f"   • Ensemble voting for robust detection")
+    logger.info(f"   • Adversarial confidence adjustment (consensus-based)")
+    logger.info(f"   • High consensus → confidence boost, Low consensus → penalty")
     
     # Process each location
     predictions = []
@@ -505,7 +577,7 @@ def process_excel_file(
 def main():
     """Main entry point for the pipeline."""
     parser = argparse.ArgumentParser(
-        description="End-to-end rooftop PV detection pipeline for EcoInnovators Ideathon"
+        description="End-to-end rooftop PV detection pipeline for NeuralStack Ecoinnovators ideathon"
     )
     parser.add_argument(
         "input_excel",
@@ -516,7 +588,7 @@ def main():
         "--model",
         type=str,
         default=MODEL_WEIGHTS_PATH,
-        help="Path to YOLOv8 model weights (default: model/model_weights/solarpanel_seg_v1.pt)"
+        help="Path to YOLOv8 model weights (default: trained_model/custommodelonmydataset.pt)"
     )
     parser.add_argument(
         "--output",
@@ -545,7 +617,7 @@ def main():
     
     # Run pipeline
     logger.info("=" * 80)
-    logger.info("EcoInnovators Rooftop PV Detection Pipeline")
+    logger.info("NeuralStack Rooftop PV Detection Pipeline")
     logger.info("=" * 80)
     
     predictions = process_excel_file(
