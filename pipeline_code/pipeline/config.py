@@ -16,7 +16,7 @@ INPUTS_DIR = PROJECT_ROOT / "inputs"
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 PREDICTIONS_DIR = OUTPUTS_DIR / "predictions"
 OVERLAYS_DIR = OUTPUTS_DIR / "overlays"
-OUTPUT_PREDICTIONS_DIR = str(PREDICTIONS_DIR)  # String version for compatibility
+OUTPUT_PREDICTIONS_DIR = PREDICTIONS_DIR  # Path object for consistent path operations
 OUTPUT_OVERLAYS_DIR = OVERLAYS_DIR  # Path object
 LOGS_DIR = PROJECT_ROOT / "logs"
 

@@ -70,24 +70,14 @@ REM Activate API key if evaluator file exists
 if exist .env.evaluator (
     echo [INFO] Checking for API key...
     copy /Y .env.evaluator .env >nul 2>&1
-    if errorlevel 1 (
-        echo [INFO] No API key found - will use browser mode (works great!)
-    ) else (
-        findstr /C:"GOOGLE_MAPS_API_KEY=AIza" .env >nul 2>&1
-        if errorlevel 1 (
-            echo [INFO] No API key configured - using browser mode (3-5s per image)
-            echo [TIP]  For faster processing (0.5s), add API key to .env.evaluator
-        ) else (
-            echo [SUCCESS] API key found - fast mode enabled! (0.5s per image)
-        )
-    )
+    echo [SUCCESS] Configuration file copied!
     echo.
 )
 
 REM Install requirements
 echo [4/4] Installing dependencies (this may take 3-5 minutes)...
 python -m pip install --upgrade pip --quiet
-pip install -r environment_details\requirements.txt
+pip install -r "environment_details\requirements.txt"
 
 echo.
 echo [5/5] Checking browser availability...

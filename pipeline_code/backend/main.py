@@ -13,6 +13,7 @@ import logging
 from pathlib import Path
 import sys
 import uuid
+import json
 from datetime import datetime
 
 # Add parent directory to path to import pipeline modules
@@ -457,7 +458,6 @@ async def get_result(sample_id: int):
             detail=f"No result found for sample_id {sample_id}"
         )
     
-    import json
     with open(json_file, 'r') as f:
         data = json.load(f)
     
@@ -623,7 +623,7 @@ async def export_pdf_report(sample_id: int):
     """
     try:
         # Find the JSON result file
-        json_path = OUTPUT_PREDICTIONS_DIR / f"{sample_id}.json"
+        json_path = Path(OUTPUT_PREDICTIONS_DIR) / f"{sample_id}.json"
         
         if not json_path.exists():
             raise HTTPException(
@@ -636,7 +636,7 @@ async def export_pdf_report(sample_id: int):
             result_data = json.load(f)
         
         # Find overlay image
-        overlay_path = OUTPUT_OVERLAYS_DIR / f"{sample_id}_overlay.png"
+        overlay_path = Path(OUTPUT_OVERLAYS_DIR) / f"{sample_id}_overlay.png"
         if not overlay_path.exists():
             overlay_path = None
         
