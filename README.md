@@ -43,21 +43,64 @@ Complete end-to-end AI-powered system for detecting rooftop solar panels from sa
 
 ## 🛠️ Installation
 
-### 1. Clone or Setup Project
+### 1. Extract Project
+```bash
+# Extract Idethon-submission.zip to your desired location
+```
 
-The project is already set up in your workspace!
+### 2. Run Setup (One-Time)
+```bash
+# Run the automated setup script
+setup.bat
 
-### 2. Google Maps API Key (Optional)
+# This will:
+# - Verify Python 3.10+ installation
+# - Create virtual environment (.venv)
+# - Install all dependencies (~3-5 minutes for PyTorch, FastAPI, etc.)
+# - Create .env file from template
+# - Set up output directories (predictions, overlays, reports, logs)
+# - Detect available browsers for imagery fetching
+```
+
+### 3. API Key Configuration (Optional)
 
 The system supports **two modes** for fetching satellite imagery:
 
 #### **Mode 1: Browser Automation** (Default - No Setup Required)
-✅ **Works immediately** - uses Chrome/Edge/Firefox/Brave  
+✅ **Works immediately** - uses Chrome/Edge/Firefox/Brave/Opera  
 ⏱️ Speed: 3-5 seconds per image  
 💰 Cost: Free  
+📝 **No API key needed** - system uses this mode when .env is blank
 
-#### **Mode 2: Google Maps API** (Optional - Faster)
+#### **Mode 2: Google Maps Static API** (Optional - Faster)
 ⚡ Speed: 0.5 seconds per image  
+📝 **Requires API key** - add to .env file:
+
+```bash
+# Open .env file (created by setup.bat)
+# Add your Google Maps Static API key:
+GOOGLE_MAPS_API_KEY=your_api_key_here
+
+# Leave blank for browser automation mode
+```
+
+### 4. Start Server
+```bash
+start_server.bat
+
+# Server starts on http://localhost:8000
+```
+
+## 🚀 Quick Start for Evaluators
+
+1. **Extract** submission zip
+2. **Run** `setup.bat` (one-time setup)
+3. **Optional**: Add API key to `.env` file (or skip for browser mode)
+4. **Run** `start_server.bat`
+5. **Open** `http://localhost:8000` in browser
+6. **Test** with coordinates: `26.9124, 75.7873` (Jaipur)
+
+> 💡 **Note**: setup.bat automatically creates .env file. You only need to open it and add your API key if you want faster imagery fetching.  
 💰 Cost: Free tier (40,000 requests/month)  
 
 **To enable fast API mode (optional):**

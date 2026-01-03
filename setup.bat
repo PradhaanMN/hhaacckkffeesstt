@@ -66,12 +66,14 @@ if errorlevel 1 (
 echo [SUCCESS] Virtual environment activated!
 echo.
 
-REM Activate API key if evaluator file exists
-if exist .env.evaluator (
-    echo [INFO] Checking for API key...
-    copy /Y .env.evaluator .env >nul 2>&1
-    echo [SUCCESS] Configuration file copied!
-    echo.
+REM Create .env file from template if it doesn't exist
+if not exist .env (
+    if exist .env.template (
+        echo [INFO] Creating .env file from template...
+        copy /Y .env.template .env >nul 2>&1
+        echo [SUCCESS] .env file created! You can add your API key there (optional^)
+        echo.
+    )
 )
 
 REM Install requirements

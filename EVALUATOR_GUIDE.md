@@ -7,28 +7,39 @@
 
 ## 🎯 Quick Start (3 Minutes)
 
-### 1. Setup (1 minute)
+### 1. Setup (One-Time, 3-5 minutes)
 ```bash
-# Run automated setup
+# Extract submission zip and run setup
 setup.bat
 
-# Expected: [OK] for Python, dependencies, GPU, browser detection
+# This will:
+# - Check Python 3.10+ installation
+# - Create virtual environment
+# - Install all dependencies (PyTorch, FastAPI, Selenium, etc.)
+# - Create .env file for optional API key
+# - Set up output directories
+# - Detect available browsers
 ```
 
-### 2. Launch (30 seconds)
+### 2. API Key (Optional - Skip for Browser Mode)
 ```bash
-# Optional: Set Google Maps API key for faster imagery (recommended)
-$env:GOOGLE_MAPS_API_KEY="YOUR_KEY"  # Or paste in config.py line 51
+# If you have a Google Maps Static API key for faster imagery:
+# Open .env file and add your key:
+GOOGLE_MAPS_API_KEY=your_api_key_here
 
-# Start the server
+# Leave blank to use browser automation (works without API key)
+```
+
+### 3. Start Server
+```bash
 start_server.bat
 
 # Expected: Server starts on http://127.0.0.1:8000
-# - With API: Uses Google Maps Static API (faster, more reliable)
-# - Without API: Falls back to browser automation (works but slower)
+# - With API key: Uses Google Maps Static API (0.5s per image)
+# - Without API key: Uses browser automation (3-5s per image)
 ```
 
-### 3. Test (90 seconds)
+### 4. Test (90 seconds)
 1. Open browser → `http://127.0.0.1:8000`
 2. Enter test coordinates: `26.9124, 75.7873` (Jaipur)
 3. Click "Process Location"
