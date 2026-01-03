@@ -68,9 +68,13 @@ class SolarPanelDetector:
             for model_path_str in ensemble_models:
                 model_path_obj = Path(model_path_str)
                 if model_path_obj.exists():
-                    logger.info(f"Loading ensemble model from {model_path_str}")
-                    ensemble_model = YOLO(str(model_path_str))
-                    self.ensemble_models.append(ensemble_model)
+                    try:
+                        logger.info(f"Loading ensemble model from {model_path_str}")
+                        ensemble_model = YOLO(str(model_path_str))
+                        self.ensemble_models.append(ensemble_model)
+                    except Exception as e:
+                        logger.warning(f"Failed to load ensemble model {model_path_str}: {e}")
+                        logger.warning("Skipping corrupted/invalid model file")
                 else:
                     logger.warning(f"Ensemble model not found: {model_path_str}")
         
