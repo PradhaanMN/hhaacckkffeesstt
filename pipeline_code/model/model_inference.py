@@ -437,7 +437,7 @@ class SolarPanelDetector:
         5. Filter out low-confidence adversarial challenges
         
         Custom Model Priority:
-        - model_id=0 (solarpanel_seg_v1.pt): Your custom-trained model gets 2x weight
+        - model_id=0 (solarpanel_seg_v1.pt): Your custom-trained model gets 3.5x weight
         - Capable of both detection and segmentation
         - Takes precedence in confidence calculation and filtering decisions
         """
@@ -488,8 +488,8 @@ class SolarPanelDetector:
             custom_model_present = False
             
             for d in consensus_group:
-                if d['model_id'] == 0:  # Custom model gets 2.5x weight
-                    weight = 2.5
+                if d['model_id'] == 0:  # Custom model gets 3.5x weight
+                    weight = 3.5
                     custom_model_present = True
                 else:
                     weight = 1.0
@@ -500,7 +500,7 @@ class SolarPanelDetector:
             
             # Extra boost if custom model is present
             if custom_model_present:
-                base_confidence = min(base_confidence * 1.15, 1.0)  # +15% bonus, cap at 100%
+                base_confidence = min(base_confidence * 1.25, 1.0)  # +25% bonus, cap at 100%
             
             # Apply confidence adjustment based on consensus (relaxed thresholds)
             if consensus_ratio >= 0.6:
