@@ -225,6 +225,43 @@ def create_pdf_report(
         elements.append(stats_table)
         elements.append(Spacer(1, 0.5*inch))
     
+    # JSON Data Section
+    elements.append(Paragraph("Raw JSON Data", heading_style))
+    
+    # Format JSON data nicely
+    json_str = json.dumps(result_data, indent=2)
+    # Split into lines and limit length
+    json_lines = json_str.split('\n')
+    
+    # Create a code-style paragraph for JSON
+    code_style = ParagraphStyle(
+        'CodeStyle',
+        parent=normal_style,
+        fontSize=8,
+        fontName='Courier',
+        textColor=colors.HexColor('#2c3e50'),
+        leftIndent=10,
+        rightIndent=10,
+        spaceAfter=6,
+        leading=10,
+        backColor=colors.HexColor('#f8f9fa')
+    )
+    
+    # Add JSON content (limit to reasonable size)
+    max_lines = 50
+    for i, line in enumerate(json_lines[:max_lines]):
+        # Escape special characters for reportlab
+        line = line.replace('<', '&lt;').replace('>', '&gt;').replace('&', '&amp;')
+        elements.append(Paragraph(f"<font name='Courier'>{line}</font>", code_style))
+    
+    if len(json_lines) > max_lines:
+        elements.append(Paragraph(
+            f"<i>... ({len(json_lines) - max_lines} more lines truncated)</i>",
+            ParagraphStyle('truncated', parent=normal_style, fontSize=8, textColor=colors.grey, alignment=TA_CENTER)
+        ))
+    
+    elements.append(Spacer(1, 0.3*inch))
+    
     # Footer
     footer_text = Paragraph(
         "<b>NeuralStack Ecoinnovators ideathon 2026</b><br/>"
