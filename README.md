@@ -12,7 +12,7 @@ Complete end-to-end AI-powered system for detecting rooftop solar panels from sa
   - Automatic fallback ensures 100% uptime
 - ✅ **State-of-the-Art AI Pipeline**:
   - **6 YOLOv8 Models**: Segmentation + detection ensemble (~32k+ training images)
-  - **Custom Model Priority**: Your trained model gets **5x weight + 35% confidence boost** (maximum priority)
+  - **Custom Model Priority**: Your trained model gets **6x weight + 40% confidence boost** (maximum priority)
   - **Toggleable Hybrid Algorithm**: Advanced consensus voting + adversarial filtering
   - **Test-Time Augmentation**: Horizontal flip variants for robustness
   - **Multi-Scale Inference**: 90%, 100%, 110% scale processing
