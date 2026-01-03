@@ -1,5 +1,5 @@
 # YOLOv8 Solar Panel Detection - Requirements
-# Python 3.10 or 3.11 recommended
+# Python 3.10+ recommended
 
 # Core Deep Learning
 torch>=2.0.0
@@ -14,6 +14,8 @@ shapely>=2.0.0
 # Automated Imagery Retrieval
 selenium>=4.0.0
 requests>=2.31.0  # For Google Maps Static API
+webdriver-manager>=4.0.0  # Auto-install browser drivers
+python-dotenv>=1.0.0  # Load .env files for API keys
 
 # Data Processing
 numpy>=1.24.0

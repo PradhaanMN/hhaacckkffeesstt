@@ -75,12 +75,32 @@ if exist .env.evaluator (
 )
 
 REM Install requirements
-echo [4/4] Installing dependencies (this may take 3-5 minutes)...
+echo [4/5] Installing dependencies (this may take 3-5 minutes)...
 python -m pip install --upgrade pip --quiet
 pip install -r "environment_details\requirements.txt"
 
+if errorlevel 1 (
+    echo [ERROR] Failed to install dependencies!
+    echo Please check your internet connection and try again.
+    pause
+    exit /b 1
+)
+
 echo.
-echo [5/5] Checking browser availability...
+echo [SUCCESS] All dependencies installed!
+echo.
+
+echo [5/5] Creating necessary directories...
+mkdir pipeline_code\outputs\predictions 2>nul
+mkdir pipeline_code\outputs\overlays 2>nul
+mkdir pipeline_code\outputs\reports 2>nul
+mkdir pipeline_code\outputs\feedback 2>nul
+mkdir temp_images 2>nul
+mkdir logs 2>nul
+echo [SUCCESS] Directories created!
+echo.
+
+echo [6/6] Checking browser availability...
 echo.
 
 REM Check for Chrome
