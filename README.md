@@ -81,7 +81,8 @@ The system supports **two modes** for fetching satellite imagery:
 # Add your Google Maps Static API key:
 GOOGLE_MAPS_API_KEY=your_api_key_here
 
-# Leave blank for browser automation mode
+# IMPORTANT: Restart the server after adding API key!
+# Stop server (Ctrl+C) and run start_server.bat again
 ```
 
 ### 4. Start Server
