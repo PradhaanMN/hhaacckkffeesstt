@@ -692,6 +692,4 @@ The final model was trained on a comprehensive dataset combining 6 different sou
 5. **Solar panels v1i** (367 images) - Mixed resolution panel imagery
 6. **Solarpv-INDIA** (293 images) - Indian solar installations from satellite
 
-**Total**: 6,876 images (6,365 training + 511 validation)
-
 All datasets have been removed from this repository to reduce size for submission. Only the final trained model is included.
