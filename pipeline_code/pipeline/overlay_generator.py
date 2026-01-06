@@ -350,7 +350,7 @@ def create_overlay_image(
             )
         
         # Draw ALL detections with split coloring
-        # Green for part inside buffer, red for part outside
+        # Green for SELECTED panel only, red/gray for others
         for detection in detections:
             polygon = detection.get("polygon", [])
             bbox = detection.get("bbox", [])
@@ -358,6 +358,19 @@ def create_overlay_image(
             
             if not polygon or len(polygon) < 3:
                 continue
+            
+            # Check if this is the selected panel
+            is_selected = False
+            if selected_panel and selected_panel.get("polygon"):
+                # Compare polygons to see if this is the selected one
+                selected_poly = selected_panel.get("polygon")
+                if len(polygon) == len(selected_poly):
+                    # Check if coordinates match (with tolerance)
+                    coords_match = all(
+                        abs(p1[0] - p2[0]) < 1 and abs(p1[1] - p2[1]) < 1
+                        for p1, p2 in zip(polygon, selected_poly)
+                    )
+                    is_selected = coords_match
             
             # Calculate what portion is inside buffer
             from shapely.geometry import Polygon, Point
@@ -391,18 +404,32 @@ def create_overlay_image(
                                 if len(coords) >= 3:
                                     draw_polygon(image, coords, (0, 0, 255), thickness=3, filled=False, alpha=0)
                 
-                # Draw INSIDE part SECOND - FILLED in GREEN (on top)
+                # Draw INSIDE part - FILLED in GREEN only if SELECTED, otherwise gray outline
                 if not inside_part.is_empty:
-                    if inside_part.geom_type == 'Polygon':
-                        coords = list(inside_part.exterior.coords)
-                        if len(coords) >= 3:
-                            draw_polygon(image, coords, (0, 255, 0), thickness=2, filled=True, alpha=0.5)
-                    elif inside_part.geom_type in ['MultiPolygon', 'GeometryCollection']:
-                        for geom in inside_part.geoms:
-                            if geom.geom_type == 'Polygon':
-                                coords = list(geom.exterior.coords)
-                                if len(coords) >= 3:
-                                    draw_polygon(image, coords, (0, 255, 0), thickness=2, filled=True, alpha=0.5)
+                    if is_selected:
+                        # Selected panel - GREEN FILL
+                        if inside_part.geom_type == 'Polygon':
+                            coords = list(inside_part.exterior.coords)
+                            if len(coords) >= 3:
+                                draw_polygon(image, coords, (0, 255, 0), thickness=2, filled=True, alpha=0.5)
+                        elif inside_part.geom_type in ['MultiPolygon', 'GeometryCollection']:
+                            for geom in inside_part.geoms:
+                                if geom.geom_type == 'Polygon':
+                                    coords = list(geom.exterior.coords)
+                                    if len(coords) >= 3:
+                                        draw_polygon(image, coords, (0, 255, 0), thickness=2, filled=True, alpha=0.5)
+                    else:
+                        # Non-selected panel inside buffer - GRAY OUTLINE only
+                        if inside_part.geom_type == 'Polygon':
+                            coords = list(inside_part.exterior.coords)
+                            if len(coords) >= 3:
+                                draw_polygon(image, coords, (128, 128, 128), thickness=2, filled=False, alpha=0)
+                        elif inside_part.geom_type in ['MultiPolygon', 'GeometryCollection']:
+                            for geom in inside_part.geoms:
+                                if geom.geom_type == 'Polygon':
+                                    coords = list(geom.exterior.coords)
+                                    if len(coords) >= 3:
+                                        draw_polygon(image, coords, (128, 128, 128), thickness=2, filled=False, alpha=0)
                 
                 # Calculate inside ratio for bbox color
                 inside_area = inside_part.area if not inside_part.is_empty else 0
@@ -411,14 +438,19 @@ def create_overlay_image(
                 
                 split_success = True
                 
-                # Color bbox based on how much is inside (green or red only)
-                if inside_ratio > 0.5:
-                    # More than half inside - GREEN bbox
+                # Color bbox based on whether it's selected and inside
+                if is_selected and inside_ratio > 0.5:
+                    # Selected panel inside - GREEN bbox with thick border
                     bbox_color = (0, 255, 0)
+                    label = f"SELECTED {confidence:.0%}"
+                    thickness_val = 4
+                elif inside_ratio > 0.5:
+                    # Non-selected panel inside - GRAY bbox
+                    bbox_color = (128, 128, 128)
                     label = f"Solar {confidence:.0%}"
-                    thickness_val = 3
+                    thickness_val = 2
                 else:
-                    # More than half outside - RED bbox
+                    # Outside buffer - RED bbox
                     bbox_color = (0, 0, 255)
                     label = f"{confidence:.0%}"
                     thickness_val = 2
@@ -434,13 +466,20 @@ def create_overlay_image(
                 distance = np.sqrt((centroid_x - center[0])**2 + (centroid_y - center[1])**2)
                 
                 if distance <= active_radius:
-                    # Inside - green filled
-                    draw_polygon(image, polygon, (0, 255, 0), thickness=2, filled=True, alpha=0.5)
-                    bbox_color = (0, 255, 0)
-                    label = f"Solar {confidence:.0%}"
-                    thickness_val = 3
+                    if is_selected:
+                        # Selected panel inside - GREEN FILL
+                        draw_polygon(image, polygon, (0, 255, 0), thickness=2, filled=True, alpha=0.5)
+                        bbox_color = (0, 255, 0)
+                        label = f"SELECTED {confidence:.0%}"
+                        thickness_val = 4
+                    else:
+                        # Non-selected panel inside - GRAY OUTLINE
+                        draw_polygon(image, polygon, (128, 128, 128), thickness=2, filled=False, alpha=0)
+                        bbox_color = (128, 128, 128)
+                        label = f"Solar {confidence:.0%}"
+                        thickness_val = 2
                 else:
-                    # Outside - red outline only
+                    # Outside - RED OUTLINE only
                     draw_polygon(image, polygon, (0, 0, 255), thickness=3, filled=False, alpha=0)
                     bbox_color = (0, 0, 255)
                     label = f"{confidence:.0%}"
@@ -456,8 +495,12 @@ def create_overlay_image(
         cv2.rectangle(image, (5, 5), (560, legend_height), (255, 255, 255), 2)
         
         legend_y = 25
-        cv2.putText(image, "GREEN Fill: Panel area INSIDE buffer zone", (10, legend_y),
+        cv2.putText(image, "GREEN Fill: SELECTED panel inside buffer zone", (10, legend_y),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        
+        legend_y += 22
+        cv2.putText(image, "GRAY Outline: Other panels inside buffer zone", (10, legend_y),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (128, 128, 128), 2)
         
         legend_y += 22
         cv2.putText(image, "RED Outline: Panel area OUTSIDE buffer zone", (10, legend_y),
