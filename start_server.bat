@@ -69,3 +69,4 @@ echo.
 python -m uvicorn %BACKEND_PATH%:app --host 0.0.0.0 --port 8000
 
 pause
+

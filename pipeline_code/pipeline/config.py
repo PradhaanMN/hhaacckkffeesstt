@@ -95,3 +95,4 @@ OVERLAY_ALPHA = 0.3  # Transparency for filled polygons
 # Create directories if they don't exist
 for directory in [INPUTS_DIR, PREDICTIONS_DIR, OVERLAYS_DIR, LOGS_DIR]:
     directory.mkdir(parents=True, exist_ok=True)
+

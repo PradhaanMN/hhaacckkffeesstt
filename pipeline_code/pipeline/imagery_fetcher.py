@@ -797,3 +797,4 @@ def validate_coordinates(lat: float, lon: float) -> bool:
         return False
     
     return True
+

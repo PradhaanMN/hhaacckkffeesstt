@@ -25,3 +25,4 @@ Platform Support:
 - Windows 10/11: ✓ Tested and working
 - Linux: ✓ Compatible
 - macOS: ✓ Compatible
+

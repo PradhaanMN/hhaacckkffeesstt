@@ -605,3 +605,4 @@ def encode_polygon_for_json(polygon: List[List[float]]) -> str:
     # Format as "[[x1,y1],[x2,y2],...]"
     coords = ",".join([f"[{p[0]:.1f},{p[1]:.1f}]" for p in polygon])
     return f"[{coords}]"
+

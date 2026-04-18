@@ -169,3 +169,4 @@ def create_summary_report(
     except Exception as e:
         logger.exception(f"Error writing summary report: {e}")
         return None
+

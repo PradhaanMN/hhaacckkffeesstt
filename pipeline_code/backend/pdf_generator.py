@@ -388,3 +388,4 @@ def create_batch_pdf_report(
     doc.build(elements)
     
     return output_path
+

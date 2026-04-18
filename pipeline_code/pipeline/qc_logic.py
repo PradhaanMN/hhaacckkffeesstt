@@ -143,3 +143,4 @@ def check_image_quality(image_path: str) -> Dict:
         result["quality_ok"] = True  # Default to OK if we can't check
     
     return result
+

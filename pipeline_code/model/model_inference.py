@@ -864,3 +864,4 @@ def get_model_info(model_path: str) -> Dict:
     except Exception as e:
         logger.exception(f"Error getting model info: {e}")
         return {"error": str(e)}
+
