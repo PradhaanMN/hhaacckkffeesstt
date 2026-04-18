@@ -1,5 +1,5 @@
 """
-FastAPI Backend for EcoInnovators Ideathon 2026
+FastAPI Backend for
 Rooftop Solar Panel Detection - Governance-Ready Digital Verification Pipeline
 """
 
@@ -7,14 +7,37 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 import logging
 from pathlib import Path
 import sys
 import uuid
 import json
+import math
+import numpy as np
 from datetime import datetime
+
+# ── US Zipcode Shapefile (lazy-loaded on first request) ───────────────────────
+_ZIPSHP = Path(
+    r"D:\hackfest\sinchan_adithya_pradhaan_neural_stack_eco_innovators"
+    r"\tl_2023_us_zcta520\tl_2023_us_zcta520.shp"
+)
+_zipcode_gdf = None           # populated on first /api/zipcode call
+
+def _get_zipcode_gdf():
+    global _zipcode_gdf
+    if _zipcode_gdf is None:
+        if not _ZIPSHP.exists():
+            raise FileNotFoundError(f"Zipcode shapefile not found: {_ZIPSHP}")
+        import geopandas as gpd
+        gdf = gpd.read_file(str(_ZIPSHP), columns=["ZCTA5CE20", "geometry"])
+        _zipcode_gdf = gdf[["ZCTA5CE20", "geometry"]]
+        logging.getLogger(__name__).info(
+            f"Loaded {len(_zipcode_gdf):,} US ZCTAs from shapefile"
+        )
+    return _zipcode_gdf
+
 
 # Add parent directory to path to import pipeline modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -33,9 +56,96 @@ from pipeline.main import (
     find_panels_in_buffer, 
     select_largest_panel_in_buffer,
     convert_pixel_area_to_sqm,
-    process_single_location
+    process_single_location,
+    process_location_sweep,          # buffer-free sweep variant
 )
 from backend.pdf_generator import create_pdf_report, create_batch_pdf_report
+
+
+def stitch_sweep_tiles(
+    results: list,
+    output_dir: str,
+    stitch_id: str,
+) -> dict:
+    """
+    Stitch all per-tile overlay PNGs into a single georeferenced image.
+    Returns {"url": "/outputs/overlays/...", "bounds": [[s,w],[n,e]]} or None.
+    """
+    import cv2
+    from pathlib import Path as PPath
+
+    # Only tiles that have an overlay AND a position
+    tiles = [
+        r for r in results
+        if r.get("overlay_url") and r.get("latitude") and r.get("longitude")
+    ]
+    if not tiles:
+        return None
+
+    # Meters per degree (approx)
+    M_PER_DEG_LAT = 111320.0
+    HALF_M = 16.64        # half-side of each 640x640 tile @ ~33x33 m
+    TILE_PX = 640
+
+    # Geographic extent
+    lats = [t["latitude"]  for t in tiles]
+    lons = [t["longitude"] for t in tiles]
+    min_lat, max_lat = min(lats), max(lats)
+    min_lon, max_lon = min(lons), max(lons)
+
+    # Add half-tile padding so edge tiles are fully included
+    avg_lat  = (min_lat + max_lat) / 2
+    dLat     = HALF_M / M_PER_DEG_LAT
+    dLon     = HALF_M / (M_PER_DEG_LAT * math.cos(math.radians(avg_lat)))
+    sw_lat, sw_lon = min_lat - dLat, min_lon - dLon
+    ne_lat, ne_lon = max_lat + dLat, max_lon + dLon
+
+    # Canvas size (pixels) — scale: 1 tile = TILE_PX px
+    lat_range = ne_lat - sw_lat
+    lon_range = ne_lon - sw_lon
+    if lat_range < 1e-9 or lon_range < 1e-9:
+        return None
+
+    # pixels per degree
+    ppd_lat = TILE_PX / (dLat * 2)
+    ppd_lon = TILE_PX / (dLon * 2)
+
+    canvas_h = max(TILE_PX, int(lat_range * ppd_lat) + 2)
+    canvas_w = max(TILE_PX, int(lon_range * ppd_lon) + 2)
+
+    canvas = np.zeros((canvas_h, canvas_w, 3), dtype=np.uint8)
+
+    for t in tiles:
+        img_path = PPath(output_dir) / PPath(t["overlay_url"]).name
+        if not img_path.exists():
+            continue
+        tile_img = cv2.imread(str(img_path))
+        if tile_img is None:
+            continue
+        th, tw = tile_img.shape[:2]
+
+        # Center pixel of this tile on canvas
+        cx = int((t["longitude"] - sw_lon) * ppd_lon)
+        cy = canvas_h - int((t["latitude"]  - sw_lat) * ppd_lat) - 1
+
+        # Paste (clip to canvas bounds)
+        x1c = cx - tw // 2;  x2c = x1c + tw
+        y1c = cy - th // 2;  y2c = y1c + th
+        x1i = max(0, -x1c);  x2i = tw - max(0, x2c - canvas_w)
+        y1i = max(0, -y1c);  y2i = th - max(0, y2c - canvas_h)
+        x1c = max(0, x1c);   x2c = min(canvas_w, x2c)
+        y1c = max(0, y1c);   y2c = min(canvas_h, y2c)
+        if x2c > x1c and y2c > y1c and x2i > x1i and y2i > y1i:
+            canvas[y1c:y2c, x1c:x2c] = tile_img[y1i:y2i, x1i:x2i]
+
+    out_path = PPath(output_dir) / f"{stitch_id}_stitched.png"
+    cv2.imwrite(str(out_path), canvas)
+    logger.info(f"Stitched {len(tiles)} tiles -> {out_path}  ({canvas_w}x{canvas_h}px)")
+    return {
+        "url":    f"/outputs/overlays/{stitch_id}_stitched.png",
+        "bounds": [[sw_lat, sw_lon], [ne_lat, ne_lon]]
+    }
+
 
 # Configure logging
 logging.basicConfig(
@@ -669,7 +779,410 @@ async def export_pdf_report(sample_id: int):
         raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
 
 
+class PincodeGridRequest(BaseModel):
+    """Request to generate a lat/lon grid from a pincode or place name"""
+    pincode: Optional[str] = Field(None, description="Indian PIN code (e.g. 560001)")
+    place: Optional[str] = Field(None, description="Place name (e.g. 'Koramangala, Bengaluru')")
+    country: str = Field("India", description="Country for pincode lookup")
+
+    class Config:
+        extra = 'forbid'
+
+
+@app.post("/api/generate-grid")
+async def generate_grid(request: PincodeGridRequest):
+    """
+    Generate a uniform 10,000 sq ft grid over a pincode / place boundary.
+
+    Returns:
+        List of {sample_id, latitude, longitude} points ready for batch verification.
+    """
+    if not request.pincode and not request.place:
+        raise HTTPException(status_code=400, detail="Provide either 'pincode' or 'place'.")
+
+    try:
+        import geopandas as gpd
+        import numpy as np
+        from shapely.geometry import box
+        import osmnx as ox
+
+        CELL_SIDE_M = 30.48  # 100 ft = 10,000 sq ft per cell
+        WGS84 = "EPSG:4326"
+
+        # --- Fetch boundary ---
+        label = request.pincode or request.place
+        queries = (
+            [{"postalcode": request.pincode, "country": request.country},
+             f"{request.pincode}, {request.country}"]
+            if request.pincode
+            else [request.place]
+        )
+
+        boundary_gdf = None
+        for query in queries:
+            try:
+                gdf = ox.geocode_to_gdf(query)
+                if gdf is not None and not gdf.empty:
+                    boundary_gdf = gdf
+                    break
+            except Exception:
+                continue
+
+        if boundary_gdf is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Could not find boundary for '{label}'. Check spelling or try a place name."
+            )
+
+        # --- Determine metric UTM CRS ---
+        centroid = boundary_gdf.geometry.union_all().centroid
+        zone = int((centroid.x + 180) / 6) + 1
+        epsg = (32600 if centroid.y >= 0 else 32700) + zone
+        metric_crs = f"EPSG:{epsg}"
+
+        # --- Project and build grid ---
+        boundary_metric = boundary_gdf.to_crs(metric_crs)
+        boundary_poly = boundary_metric.geometry.union_all()
+        minx, miny, maxx, maxy = boundary_poly.bounds
+
+        x_coords = np.arange(minx, maxx, CELL_SIDE_M)
+        y_coords = np.arange(miny, maxy, CELL_SIDE_M)
+
+        centroids = []
+        for x in x_coords:
+            for y in y_coords:
+                cell = box(x, y, x + CELL_SIDE_M, y + CELL_SIDE_M)
+                pt = cell.centroid
+                if boundary_poly.contains(pt):
+                    centroids.append(pt)
+
+        if not centroids:
+            raise HTTPException(
+                status_code=422,
+                detail="No grid cells found inside boundary. The area may be too small."
+            )
+
+        # --- Convert to WGS84 ---
+        centroids_gdf = gpd.GeoDataFrame(geometry=centroids, crs=metric_crs).to_crs(WGS84)
+        lats = np.round(centroids_gdf.geometry.y.values, 7).tolist()
+        lons = np.round(centroids_gdf.geometry.x.values, 7).tolist()
+
+        points = [
+            {"sample_id": f"Grid_{i+1:03d}", "latitude": lats[i], "longitude": lons[i]}
+            for i in range(len(lats))
+        ]
+
+        # --- Save Excel to inputs/ ---
+        import pandas as pd
+        safe_label = "".join(c if c.isalnum() or c in "-_" else "_" for c in label)
+        inputs_dir = Path(__file__).parent.parent / "inputs"
+        inputs_dir.mkdir(exist_ok=True)
+        excel_path = inputs_dir / f"grid_{safe_label}.xlsx"
+        pd.DataFrame(points).to_excel(str(excel_path), index=False, engine="openpyxl")
+
+        display_name = boundary_gdf.iloc[0].get("display_name", label)
+        area_sqkm = round(boundary_poly.area / 1e6, 3)
+
+        return {
+            "label": label,
+            "display_name": display_name,
+            "area_sqkm": area_sqkm,
+            "crs": metric_crs,
+            "total_points": len(points),
+            "excel_path": str(excel_path),
+            "points": points
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Grid generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── US Zipcode boundary lookup ─────────────────────────────────────────────
+
+import re as _re
+
+@app.get("/api/zipcode/{zipcode}")
+async def get_zipcode_boundary(zipcode: str):
+    """
+    Return the GeoJSON Feature for a US ZIP code loaded from the
+    local ZCTA shapefile (no internet required).
+    """
+    if not _re.match(r'^\d{5}$', zipcode):
+        raise HTTPException(status_code=400, detail="ZIP code must be exactly 5 digits")
+    try:
+        gdf   = _get_zipcode_gdf()
+        row   = gdf[gdf["ZCTA5CE20"] == zipcode]
+        if row.empty:
+            raise HTTPException(status_code=404, detail=f"ZIP {zipcode} not found in shapefile")
+        feat  = json.loads(row.to_crs("EPSG:4326").to_json())["features"][0]
+        feat["properties"] = {"zipcode": zipcode}
+        return feat
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Zipcode lookup failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Area Sweep ─────────────────────────────────────────────────────────────
+
+class SweepRequest(BaseModel):
+    """
+    Run a uniform 10,000 sq ft grid sweep over base_polygon minus any
+    exclusion_polygons (forests, lakes, empty land).
+    """
+    # Accept either the legacy 'geojson' key or the new 'base_polygon'
+    geojson:             Optional[dict] = Field(None,  description="[Legacy] GeoJSON polygon")
+    base_polygon:        Optional[dict] = Field(None,  description="Base polygon GeoJSON (geometry/Feature/FeatureCollection)")
+    exclusion_polygons:  List[dict]     = Field(default_factory=list,
+                                                description="Exclusion zones to subtract before gridding")
+    max_points:          int            = Field(50, ge=1, le=500)
+
+    @validator("base_polygon", always=True)
+    def _require_polygon(cls, v, values):
+        if v is None and values.get("geojson") is None:
+            raise ValueError("Provide either 'geojson' or 'base_polygon'")
+        return v
+
+    class Config:
+        extra = "ignore"      # tolerate unknown fields gracefully
+
+
+@app.post("/api/run-sweep")
+async def run_sweep(request: SweepRequest):
+    """
+    Overlay a uniform 10,000 sq ft grid on the supplied polygon, run the
+    solar-panel detection pipeline on every centroid (up to max_points),
+    and return aggregate statistics.
+    """
+    import time
+    t0 = time.time()
+
+    try:
+        import geopandas as gpd
+        import numpy as np
+        from shapely.geometry import box, shape
+
+        CELL_SIDE_M = 30.48          # 100 ft per side  => 10,000 sq ft cell
+        WGS84       = "EPSG:4326"
+
+        # ── 1. Parse base GeoJSON → shapely polygon ──────────────────
+        g = request.base_polygon or request.geojson
+        if g.get("type") == "Feature":
+            geometry = g["geometry"]
+        elif g.get("type") == "FeatureCollection":
+            geometry = g["features"][0]["geometry"]
+        else:
+            geometry = g  # already a raw geometry dict
+
+        boundary_wgs84 = shape(geometry)
+        if boundary_wgs84.is_empty:
+            raise HTTPException(status_code=422, detail="Empty polygon received.")
+
+        # ── 2. Subtract exclusion zones ──────────────────────────────
+        combined_exclusion_wgs84 = None   # kept in WGS84 for per-detection filtering
+        if request.exclusion_polygons:
+            from shapely.ops import unary_union
+            exc_shapes = []
+            for exc in request.exclusion_polygons:
+                exc_g = exc.get("geometry", exc)   # handle Feature or raw geometry
+                try:
+                    exc_shapes.append(shape(exc_g))
+                except Exception:
+                    logger.warning(f"Skipping invalid exclusion polygon: {exc_g}")
+            if exc_shapes:
+                combined_exclusion_wgs84 = unary_union(exc_shapes)
+                boundary_wgs84 = boundary_wgs84.difference(combined_exclusion_wgs84)
+                logger.info(
+                    f"After exclusion subtraction: valid area = "
+                    f"{boundary_wgs84.area * 111_320**2 / 1e6:.3f} km^2"
+                )
+
+        if boundary_wgs84.is_empty:
+            raise HTTPException(status_code=422,
+                detail="Polygon is empty after applying exclusion zones.")
+
+        # ── 2. Auto-select UTM zone (robust) ─────────────────────────────
+        c = boundary_wgs84.centroid
+        raw_x, raw_y = c.x, c.y
+
+        # Auto-detect swapped lat/lng: valid longitude is [-180,180],
+        # valid latitude is [-90,90].  If x looks like latitude and y
+        # looks like longitude, swap them before computing the zone.
+        if abs(raw_x) <= 90 and abs(raw_y) > 90:
+            logger.warning(
+                f"Detected swapped lat/lng in polygon centroid "
+                f"(x={raw_x}, y={raw_y}) – swapping for UTM zone calc."
+            )
+            lon_for_zone, lat_for_zone = raw_y, raw_x
+        else:
+            lon_for_zone, lat_for_zone = raw_x, raw_y
+
+        # Normalise longitude to [-180, 180]
+        lon_for_zone = ((lon_for_zone + 180) % 360) - 180
+
+        # Clamp zone to valid UTM range 1–60
+        zone    = max(1, min(60, int((lon_for_zone + 180) / 6) + 1))
+        is_south = lat_for_zone < 0
+
+        logger.info(f"Polygon centroid: lon={lon_for_zone:.4f}, lat={lat_for_zone:.4f} → UTM zone {zone} ({'S' if is_south else 'N'})")
+
+        # Use pyproj CRS dict to avoid EPSG-lookup failures for edge zones
+        try:
+            from pyproj import CRS as ProjCRS
+            utm_crs = ProjCRS.from_dict({
+                "proj": "utm", "zone": zone,
+                "south": is_south, "datum": "WGS84", "units": "m"
+            })
+        except Exception:
+            # Fall back to EPSG string if pyproj dict fails
+            epsg    = (32700 if is_south else 32600) + zone
+            utm_crs = f"EPSG:{epsg}"
+
+        # ── 3. Project & build grid ─────────────────────────────
+        gdf_wgs = gpd.GeoDataFrame(geometry=[boundary_wgs84], crs=WGS84)
+        gdf_utm = gdf_wgs.to_crs(utm_crs)
+        poly    = gdf_utm.geometry.union_all()
+        minx, miny, maxx, maxy = poly.bounds
+
+        xs = np.arange(minx, maxx, CELL_SIDE_M)
+        ys = np.arange(miny, maxy, CELL_SIDE_M)
+
+        centroids = []
+        for x in xs:
+            for y in ys:
+                cell = box(x, y, x + CELL_SIDE_M, y + CELL_SIDE_M)
+                # Include cell if at least 25% overlaps the polygon (catches boundary cells)
+                try:
+                    overlap = poly.intersection(cell).area
+                    if overlap >= 0.25 * cell.area:
+                        centroids.append(cell.centroid)
+                except Exception:
+                    if poly.contains(cell.centroid):
+                        centroids.append(cell.centroid)
+
+        if not centroids:
+            raise HTTPException(status_code=422,
+                detail="No grid cells found inside polygon. Try a larger area.")
+
+        # ── 4. Back to WGS84 ───────────────────────────────────
+        pts_gdf = gpd.GeoDataFrame(geometry=centroids, crs=utm_crs).to_crs(WGS84)
+        lats = pts_gdf.geometry.y.values.tolist()
+        lons = pts_gdf.geometry.x.values.tolist()
+
+        total_grid_points = len(lats)
+        max_proc          = min(request.max_points, total_grid_points)
+
+        # ── 5. Run pipeline ────────────────────────────────────
+        detector = get_model()
+        temp_dir = Path("temp_images")
+        temp_dir.mkdir(exist_ok=True)
+
+        results, errors = [], []
+        for i in range(max_proc):
+            pt_t0 = time.time()
+            sid = int(datetime.utcnow().timestamp() * 1000) + i
+            try:
+                r = process_location_sweep(
+                    sample_id=sid,
+                    lat=lats[i], lon=lons[i],
+                    detector=detector,
+                    temp_dir=temp_dir,
+                    exclusion_geom=combined_exclusion_wgs84,   # filter detections inside exclusions
+                )
+                overlay_path = Path(OUTPUT_OVERLAYS_DIR) / f"{sid}_overlay.png"
+                results.append({
+                    "sample_id":            f"Sweep_{i+1:04d}",
+                    "numeric_id":           sid,
+                    "latitude":             round(lats[i], 7),
+                    "longitude":            round(lons[i], 7),
+                    "has_solar":            r.get("has_solar", False),
+                    "confidence":           round(r.get("confidence", 0), 4),
+                    "pv_area_sqm_est":      round(r.get("pv_area_sqm_est", 0), 2),
+                    "panel_count":          r.get("panel_count", 0),
+                    "buffer_radius_sqft":   0,
+                    "qc_status":            r.get("qc_status", "UNKNOWN"),
+                    "bbox_or_mask":         r.get("bbox_or_mask", ""),
+                    "power_estimate":       r.get("power_estimate", {
+                        "peak_power_kw": 0.0, "daily_energy_kwh": 0.0,
+                        "monthly_energy_kwh": 0.0, "yearly_energy_kwh": 0.0
+                    }),
+                    "image_metadata":       r.get("image_metadata", {}),
+                    "processing_time_seconds": round(time.time() - pt_t0, 2),
+                    "timing_s":             r.get("timing_s", {}),   # ← per-stage timing data
+                    "overlay_url":          f"/outputs/overlays/{sid}_overlay.png"
+                                            if overlay_path.exists() else None
+                })
+            except Exception as e:
+                logger.warning(f"Sweep point {i} failed: {e}")
+                errors.append({"index": i, "error": str(e)})
+
+
+        solar_hits   = [r for r in results if r["has_solar"]]
+        total_area   = round(sum(r["pv_area_sqm_est"] for r in solar_hits), 2)
+        elapsed      = round(time.time() - t0, 2)
+
+        # ── Stitch all tile overlays into one georeferenced image ─────────
+        stitch_id      = int(datetime.utcnow().timestamp())
+        stitched_info  = stitch_sweep_tiles(results, OUTPUT_OVERLAYS_DIR, str(stitch_id))
+
+        # ── Aggregate timing across all processed points ──────────────────────
+        _keys = ["fetch_s", "inference_s", "exclusion_filter_s", "calc_s",
+                 "qc_s", "overlay_s", "power_calc_s", "cleanup_s"]
+        _labels = ["Image Fetch", "YOLO Inference", "Exclusion Filtering",
+                   "Area/Conf Calc", "QC / Image Quality", "Overlay Generation",
+                   "Power Estimation", "Temp File Cleanup"]
+        _totals = {k: 0.0 for k in _keys}
+        for r in results:
+            for k in _keys:
+                _totals[k] += r.get("timing_s", {}).get(k, 0.0)
+
+        _grand = sum(_totals[k] for k in _keys) or 1.0
+        _n     = len(results) or 1
+        timing_summary = {
+            "tiles_processed":   _n,
+            "wall_clock_s":      elapsed,
+            "pipeline_total_s":  round(_grand, 3),
+            "per_tile_avg_s":    round(_grand / _n, 3),
+            "stages": [
+                {
+                    "label":       lbl,
+                    "total_s":     round(_totals[k], 3),
+                    "avg_s":       round(_totals[k] / _n, 3),
+                    "pct":         round(_totals[k] / _grand * 100, 1),
+                }
+                for lbl, k in zip(_labels, _keys)
+            ]
+        }
+
+        return {
+            "total_grid_points":  total_grid_points,
+            "points_processed":   max_proc,
+            "points_skipped":     total_grid_points - max_proc,
+            "points_with_solar":  len(solar_hits),
+            "points_no_solar":    max_proc - len(solar_hits) - len(errors),
+            "errors":             len(errors),
+            "total_pv_area_sqm":  total_area,
+            "processing_time_s":  elapsed,
+            "utm_crs":            str(utm_crs),
+            "timing_summary":     timing_summary,
+            "stitched_overlay":   stitched_info,   # {url, bounds} or null
+            "results":            results
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"run_sweep failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
+
+
     import uvicorn
     
     # Create necessary directories
