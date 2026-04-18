@@ -1,5 +1,5 @@
 # Model Card: Solar Panel Detection System
-## NeuralStack Ecoinnovators ideathon 2026 Submission
+## NeuralStack Submission
 
 ---
 
@@ -534,7 +534,7 @@ Response:
 ## 8. Contact & Support
 
 **Team**: NeuralStack  
-**Competition**: Ecoinnovators ideathon 2026  
+**Competition**:  
 **Documentation**: See README.md, EVALUATOR_GUIDE.md  
 **Technical Details**: See [TECHNICAL_REPORT.md](../TECHNICAL_REPORT.md)  
 

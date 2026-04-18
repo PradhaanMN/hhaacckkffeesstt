@@ -1,6 +1,6 @@
 # 📊 Evaluator Guide - Solar Panel Detection System
 
-**Team**: EcoInnovators | **Ideathon**: 2026  
+**Team**: | **Ideathon**: 2026  
 **Solution**: Governance-ready Digital Verification Pipeline for PM Surya Ghar Muft Bijli Yojana
 
 ---
@@ -380,4 +380,4 @@ After evaluation, you should observe:
 ---
 
 **Thank you for evaluating our solution!**  
-*Team NeuralStack - Ecoinnovators ideathon 2026*
+*Team NeuralStack*

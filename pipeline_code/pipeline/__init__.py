@@ -1,5 +1,5 @@
 """
-NeuralStack Ecoinnovators ideathon - AI-Powered Rooftop PV Detection Pipeline
+NeuralStack - AI-Powered Rooftop PV Detection Pipeline
 PM Surya Ghar: Muft Bijli Yojana
 
 End-to-end inference pipeline for rooftop solar panel detection.

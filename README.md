@@ -1,4 +1,4 @@
-# 🌞 Solar Panel Detection System - NeuralStack Ecoinnovators ideathon 2026
+# 🌞 Solar Panel Detection System - NeuralStack
 
 > **For Evaluators**: Start with [EVALUATOR_GUIDE.md](EVALUATOR_GUIDE.md) for a comprehensive overview and quick demo.
 
@@ -140,11 +140,11 @@ python -c "import torch; import ultralytics; print('✓ Installation successful'
 
 ---
 
-## 🎯 End-to-End Inference Pipeline (NeuralStack Ecoinnovators ideathon)
+## 🎯 End-to-End Inference Pipeline (NeuralStack)
 
 ### Overview
 
-Complete pipeline for rooftop PV detection following NeuralStack Ecoinnovators ideathon specifications:
+Complete pipeline for rooftop PV detection following NeuralStack specifications:
 - **Input**: Excel file with coordinates (sample_id, latitude, longitude)
 - **Processing**: Automated imagery fetching, AI inference, buffer zone analysis
 - **Output**: JSON predictions + visual overlays

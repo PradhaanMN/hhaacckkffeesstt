@@ -1,5 +1,5 @@
 """
-Configuration file for the NeuralStack Ecoinnovators ideathon pipeline.
+Configuration file for the NeuralStack pipeline.
 Contains paths, constants, and settings.
 """
 

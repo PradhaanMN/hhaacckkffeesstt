@@ -1,7 +1,7 @@
 @echo off
 REM ================================================================================
 REM Solar Panel Detection System - Start Server
-REM NeuralStack Ecoinnovators ideathon 2026
+REM NeuralStack
 REM ================================================================================
 
 echo.

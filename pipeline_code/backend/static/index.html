@@ -1132,18 +1132,31 @@
                     </div>
 
                     <!-- Go-to Lat/Lon bar -->
-                    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+                    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
                         <input id="gotoLat" type="number" step="any" placeholder="Latitude"
-                            style="flex:1;padding:9px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-size:.88em;outline:none;"
+                            style="flex:1;min-width:90px;padding:9px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-size:.88em;outline:none;"
                             onkeydown="if(event.key==='Enter')sweepGoToLatLon()">
                         <input id="gotoLon" type="number" step="any" placeholder="Longitude"
-                            style="flex:1;padding:9px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-size:.88em;outline:none;"
+                            style="flex:1;min-width:90px;padding:9px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-size:.88em;outline:none;"
                             onkeydown="if(event.key==='Enter')sweepGoToLatLon()">
                         <button onclick="sweepGoToLatLon()"
                             style="padding:9px 18px;border-radius:10px;border:none;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;font-size:.88em;font-weight:700;cursor:pointer;white-space:nowrap;transition:opacity .2s;"
                             onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
                             &#10148; Go
                         </button>
+                        <!-- Clear Map History dropdown -->
+                        <div style="position:relative;display:inline-block;">
+                            <button onclick="toggleClearMenu(event)"
+                                style="padding:9px 14px;border-radius:10px;border:1px solid rgba(239,68,68,.45);background:rgba(239,68,68,.1);color:#ef4444;font-size:.85em;font-weight:600;cursor:pointer;white-space:nowrap;">
+                                &#128465; Clear &#9662;
+                            </button>
+                            <div id="clearHistoryMenu" style="display:none;position:absolute;right:0;top:110%;background:#1e293b;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px;z-index:9999;min-width:170px;box-shadow:0 8px 24px rgba(0,0,0,.5);">
+                                <div onclick="clearLastScan()" style="padding:8px 12px;border-radius:7px;color:#fff;font-size:.82em;cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,.08)'" onmouseout="this.style.background=''">&#8617; Clear Last Scan</div>
+                                <div onclick="openScanPicker()" style="padding:8px 12px;border-radius:7px;color:#fff;font-size:.82em;cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,.08)'" onmouseout="this.style.background=''">&#9776; Select Scans to Clear</div>
+                                <div style="height:1px;background:rgba(255,255,255,.1);margin:4px 0;"></div>
+                                <div onclick="clearCompositeHistory()" style="padding:8px 12px;border-radius:7px;color:#ef4444;font-size:.82em;cursor:pointer;" onmouseover="this.style.background='rgba(239,68,68,.12)'" onmouseout="this.style.background=''">&#10006; Clear All Time</div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Leaflet map -->
@@ -1231,21 +1244,11 @@
                         <div id="sweepGalleryWrap" style="display:none;margin-bottom:28px;">
                             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
                                 <h3 style="color:rgba(255,255,255,.7);font-size:.9em;text-transform:uppercase;letter-spacing:.6px;margin:0;">&#128247; Detection Result Map</h3>
-                                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                <div style="display:flex;gap:8px;">
                                     <button id="compositeViewBtn" onclick="toggleCompositeOpacity()"
                                         style="padding:5px 13px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:.78em;cursor:pointer;">Opacity: 80%</button>
                                     <button onclick="window.sweepCompositeMap && window.sweepCompositeMap.fitBounds(window.sweepCompositeBounds)"
                                         style="padding:5px 13px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:.78em;cursor:pointer;">&#8982; Fit All</button>
-                                    <div style="position:relative;display:inline-block;">
-                                        <button onclick="toggleClearMenu(event)"
-                                            style="padding:5px 13px;border-radius:8px;border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.12);color:#ef4444;font-size:.78em;cursor:pointer;">&#128465; Clear &#9662;</button>
-                                        <div id="clearHistoryMenu" style="display:none;position:absolute;right:0;top:110%;background:#1e293b;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px;z-index:9999;min-width:170px;box-shadow:0 8px 24px rgba(0,0,0,.5);">
-                                            <div onclick="clearLastScan()" style="padding:8px 12px;border-radius:7px;color:#fff;font-size:.82em;cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,.08)'" onmouseout="this.style.background=''">&#8617; Clear Last Scan</div>
-                                            <div onclick="openScanPicker()" style="padding:8px 12px;border-radius:7px;color:#fff;font-size:.82em;cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,.08)'" onmouseout="this.style.background=''">&#9776; Select Scans to Clear</div>
-                                            <div style="height:1px;background:rgba(255,255,255,.1);margin:4px 0;"></div>
-                                            <div onclick="clearCompositeHistory()" style="padding:8px 12px;border-radius:7px;color:#ef4444;font-size:.82em;cursor:pointer;" onmouseover="this.style.background='rgba(239,68,68,.12)'" onmouseout="this.style.background=''">&#10006; Clear All Time</div>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                             <!-- Leaflet result map -->
@@ -1744,7 +1747,8 @@
         }
 
         // ── Area Sweep state ────────────────────────────────────────────
-        let sweepMap = null, sweepMapInit = false;
+        let sweepMapInit = false;
+        window.sweepMap = null;
         let baseLayer      = null;   // Blue  — base polygon / zipcode boundary
         let exclusionLayer = null;   // Red   — exclusion zones (forests, lakes …)
         let drawControl    = null;   // active Leaflet.draw control
@@ -1753,7 +1757,7 @@
 
         function initSweepMap() {
             sweepMapInit = true;
-            sweepMap = L.map('sweepMap', { zoomControl: true }).setView([37.09, -95.71], 4);
+            window.sweepMap = L.map('sweepMap', { zoomControl: true }).setView([37.09, -95.71], 4);
 
             // ── Basemap layers: toggle between ESRI and Google Satellite ──
             const esri = L.tileLayer(
@@ -2444,7 +2448,7 @@
         // ── Clear All Time ────────────────────────────────────────────────
         function clearCompositeHistory() {
             hideClearMenu();
-            (window._compositeOverlays || []).forEach(ov => { if (sweepMap) sweepMap.removeLayer(ov); });
+            (window._compositeOverlays || []).forEach(ov => { if (window.sweepMap) window.sweepMap.removeLayer(ov); });
             (window._currentScanResultOverlays || []).forEach(ov => {
                 if (window.sweepCompositeMap) window.sweepCompositeMap.removeLayer(ov);
             });
@@ -2461,7 +2465,7 @@
             if (!window._compositeSessions || !window._compositeSessions.length) { alert('No scans to clear.'); return; }
             const last = window._compositeSessions.pop();
             last.overlays.forEach(ov => {
-                if (sweepMap) sweepMap.removeLayer(ov);
+                if (window.sweepMap) window.sweepMap.removeLayer(ov);
                 const i = (window._compositeOverlays || []).indexOf(ov);
                 if (i > -1) window._compositeOverlays.splice(i, 1);
             });
@@ -2502,7 +2506,7 @@
             toRemove.forEach(idx => {
                 const s = window._compositeSessions[idx];
                 s.overlays.forEach(ov => {
-                    if (sweepMap) sweepMap.removeLayer(ov);
+                    if (window.sweepMap) window.sweepMap.removeLayer(ov);
                     const i = (window._compositeOverlays || []).indexOf(ov);
                     if (i > -1) window._compositeOverlays.splice(i, 1);
                 });

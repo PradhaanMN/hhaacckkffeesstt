@@ -1,5 +1,5 @@
 # Project Structure & Deliverables Mapping
-## EcoInnovators Solar Panel Detection System
+## Solar Panel Detection System
 
 This document maps the project structure to the required competition deliverables.
 
@@ -452,7 +452,7 @@ Compress-Archive -Path @(
 
 **Contact**:
 - Team: NeuralStack
-- Competition: Ecoinnovators ideathon 2026
+- Competition:
 - Date: December 2025
 
 ---

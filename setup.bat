@@ -1,13 +1,13 @@
 @echo off
 REM ================================================================================
 REM Solar Panel Detection System - Quick Setup
-REM NeuralStack Ecoinnovators ideathon 2026
+REM NeuralStack
 REM ================================================================================
 
 echo.
 echo ================================================================================
 echo   SOLAR PANEL DETECTION SYSTEM - SETUP
-echo   NeuralStack Ecoinnovators ideathon 2026
+echo   NeuralStack
 echo ================================================================================
 echo.
 

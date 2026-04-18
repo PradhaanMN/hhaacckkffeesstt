@@ -216,33 +216,59 @@ def calculate_euclidean_distance(
 def estimate_power_generation(area_sqm: float) -> dict:
     """
     Estimate power generation capacity from solar panel area.
-    
+
     Args:
         area_sqm: Panel area in square meters
-        
+
     Returns:
-        Dictionary with power estimates
+        Dictionary with power estimates, economic savings, and CO2 metrics.
     """
-    # Solar panel efficiency assumptions for India
-    PANEL_EFFICIENCY = 0.18  # 18% (modern panels: 15-20%)
-    PEAK_SUN_HOURS = 5.5     # Average for India (5-6 hours/day)
-    SYSTEM_EFFICIENCY = 0.80  # 80% (losses: inverter, wiring, dust, temperature)
-    
-    # Peak power capacity (kW) = Area × Efficiency × 1 kW/m² (standard test)
-    peak_power_kw = area_sqm * PANEL_EFFICIENCY
-    
-    # Daily energy generation (kWh/day)
-    daily_energy_kwh = peak_power_kw * PEAK_SUN_HOURS * SYSTEM_EFFICIENCY
-    
-    # Monthly and yearly estimates
+    # ── Solar generation constants (India) ───────────────────────────────
+    PANEL_EFFICIENCY  = 0.18   # 18% (modern mono-PERC panels)
+    PEAK_SUN_HOURS    = 5.5    # Average India daily peak sun hours
+    SYSTEM_EFFICIENCY = 0.80   # Inverter + wiring + dust + temp losses
+
+    # ── Economic constants (India) ────────────────────────────────────────
+    ELECTRICITY_RATE_INR = 8.0   # ₹/kWh — average residential tariff (2024)
+    PANEL_LIFETIME_YEARS = 25    # standard warranty period
+
+    # ── Environmental constants ───────────────────────────────────────────
+    # CEA India grid emission factor (CO₂ basis), FY 2022-23: 0.82 kg CO₂/kWh
+    CO2_FACTOR_KG_PER_KWH = 0.82
+    # 1 mature tree absorbs ~21 kg CO₂/year (US EPA estimate)
+    TREE_ABSORPTION_KG_YR = 21.0
+
+    # ── Calculations ─────────────────────────────────────────────────────
+    peak_power_kw      = area_sqm * PANEL_EFFICIENCY
+    daily_energy_kwh   = peak_power_kw * PEAK_SUN_HOURS * SYSTEM_EFFICIENCY
     monthly_energy_kwh = daily_energy_kwh * 30
-    yearly_energy_kwh = daily_energy_kwh * 365
-    
+    yearly_energy_kwh  = daily_energy_kwh * 365
+
+    # Economic
+    monthly_savings_inr  = monthly_energy_kwh  * ELECTRICITY_RATE_INR
+    yearly_savings_inr   = yearly_energy_kwh   * ELECTRICITY_RATE_INR
+    lifetime_savings_inr = yearly_savings_inr  * PANEL_LIFETIME_YEARS
+
+    # Environmental
+    co2_reduction_kg_yr      = yearly_energy_kwh * CO2_FACTOR_KG_PER_KWH
+    co2_reduction_tonnes_25y = co2_reduction_kg_yr * PANEL_LIFETIME_YEARS / 1000
+    trees_equivalent_yr      = co2_reduction_kg_yr / TREE_ABSORPTION_KG_YR
+
     return {
-        "peak_power_kw": round(peak_power_kw, 2),
-        "daily_energy_kwh": round(daily_energy_kwh, 2),
-        "monthly_energy_kwh": round(monthly_energy_kwh, 2),
-        "yearly_energy_kwh": round(yearly_energy_kwh, 2)
+        # Power
+        "peak_power_kw":          round(peak_power_kw, 2),
+        "daily_energy_kwh":       round(daily_energy_kwh, 2),
+        "monthly_energy_kwh":     round(monthly_energy_kwh, 2),
+        "yearly_energy_kwh":      round(yearly_energy_kwh, 2),
+        # Economic (INR)
+        "electricity_rate_inr":   ELECTRICITY_RATE_INR,
+        "monthly_savings_inr":    round(monthly_savings_inr, 2),
+        "yearly_savings_inr":     round(yearly_savings_inr, 2),
+        "lifetime_savings_inr":   round(lifetime_savings_inr, 2),
+        # Environmental
+        "co2_reduction_kg_yr":    round(co2_reduction_kg_yr, 2),
+        "co2_reduction_tonnes_25y": round(co2_reduction_tonnes_25y, 3),
+        "trees_equivalent_yr":    round(trees_equivalent_yr, 1),
     }
 
 
@@ -472,6 +498,184 @@ def process_single_location(
     return prediction
 
 
+def process_location_sweep(
+    sample_id: int,
+    lat: float,
+    lon: float,
+    detector: "SolarPanelDetector",
+    temp_dir: Path,
+    exclusion_geom=None,   # optional shapely geometry (WGS84) to filter detections
+) -> Dict:
+    """
+    Buffer-free sweep variant used by the Area Sweep endpoint.
+
+    Detects ALL solar panels in the satellite tile (no 1200/2400 sq-ft restriction).
+    The overlay shows every detected panel in GREEN.
+
+    Args:
+        sample_id: Unique identifier
+        lat, lon: WGS84 coordinates of the grid centroid
+        detector: Loaded SolarPanelDetector
+        temp_dir: Directory for temporary imagery
+
+    Returns:
+        Prediction dictionary (same schema as process_single_location but
+        ``buffer_radius_sqft`` is set to None / 0).
+    """
+    logger.info(f"[Sweep] Processing sample {sample_id}: ({lat}, {lon})")
+
+    import time as _time
+    _t = {}          # timing buckets (seconds)
+    _t0_total = _time.perf_counter()
+
+    temp_image_path = temp_dir / f"{sample_id}_satellite.png"
+
+    # ── 1. Fetch satellite imagery ─────────────────────────────────────────
+    _t1 = _time.perf_counter()
+    fetch_result = fetch_arcgis_world_imagery(
+        lat=lat,
+        lon=lon,
+        area_sqft=IMAGERY_FETCH_SIZE_SQFT,
+        size_px=IMAGE_SIZE_PX,
+        out_path=str(temp_image_path),
+    )
+    _t["fetch_s"] = _time.perf_counter() - _t1
+
+    if not fetch_result["success"]:
+        logger.warning(f"[Sweep] Imagery fetch failed: {fetch_result.get('error')}")
+        try:
+            if temp_image_path.exists():
+                temp_image_path.unlink()
+        except Exception:
+            pass
+        return {
+            "sample_id": sample_id, "lat": lat, "lon": lon,
+            "has_solar": False, "confidence": 0.0,
+            "pv_area_sqm_est": 0.0, "panel_count": 0,
+            "buffer_radius_sqft": 0,
+            "qc_status": "NOT_VERIFIABLE", "bbox_or_mask": "",
+            "image_metadata": {"source": "ArcGIS World Imagery"},
+            "notes": f"Imagery fetch failed: {fetch_result.get('error')}",
+            "timing_s": _t,
+        }
+
+    # ── 2. YOLO inference ──────────────────────────────────────────────────
+    _t1 = _time.perf_counter()
+    detections = detector.run_inference(
+        str(temp_image_path),
+        conf_threshold=0.08,
+        use_tta=False,
+        use_multiscale=False,
+        use_hybrid=True,
+    )
+    _t["inference_s"] = _time.perf_counter() - _t1
+    raw_count = len(detections)
+    logger.info(f"[Sweep] {raw_count} panel(s) detected at ({lat:.5f}, {lon:.5f})")
+
+    # ── 3. Exclusion-zone filtering ────────────────────────────────────────
+    _t1 = _time.perf_counter()
+    if exclusion_geom is not None and not exclusion_geom.is_empty and detections:
+        import math
+        from shapely.geometry import Point
+        mppx_pre = fetch_result["meters_per_pixel_x"]
+        mppy_pre = fetch_result["meters_per_pixel_y"]
+        img_cx = IMAGE_SIZE_PX / 2
+        img_cy = IMAGE_SIZE_PX / 2
+        filtered = []
+        for det in detections:
+            poly_pts = det.get("polygon", [])
+            if not poly_pts:
+                filtered.append(det)
+                continue
+            cx_px = sum(p[0] for p in poly_pts) / len(poly_pts)
+            cy_px = sum(p[1] for p in poly_pts) / len(poly_pts)
+            dx_m = (cx_px - img_cx) * mppx_pre
+            dy_m = (img_cy - cy_px) * mppy_pre
+            det_lat = lat + dy_m / 111320
+            det_lon = lon + dx_m / (111320 * math.cos(math.radians(lat)))
+            if exclusion_geom.contains(Point(det_lon, det_lat)):
+                continue
+            filtered.append(det)
+        excluded = raw_count - len(filtered)
+        if excluded:
+            logger.info(f"[Sweep] Filtered {excluded} detection(s) inside exclusion zones")
+        detections = filtered
+    _t["exclusion_filter_s"] = _time.perf_counter() - _t1
+
+    # ── 4. Area / confidence calculations ─────────────────────────────────
+    _t1 = _time.perf_counter()
+    has_solar  = len(detections) > 0
+    confidence = max((d.get("confidence", 0) for d in detections), default=0.0)
+    mppx = fetch_result["meters_per_pixel_x"]
+    mppy = fetch_result["meters_per_pixel_y"]
+    total_area_sqm = sum(
+        convert_pixel_area_to_sqm(d.get("area_px", 0), mppx, mppy)
+        for d in detections
+    )
+    bbox_or_mask = encode_polygon_for_json(detections[0]["polygon"]) if detections else ""
+    _t["calc_s"] = _time.perf_counter() - _t1
+
+    # ── 5. QC / image quality check ───────────────────────────────────────
+    _t1 = _time.perf_counter()
+    image_quality = check_image_quality(str(temp_image_path))
+    qc_status = determine_qc_status(
+        image_fetch_success=True,
+        detections=detections,
+        image_metadata=image_quality,
+        notes=None,
+    )
+    _t["qc_s"] = _time.perf_counter() - _t1
+
+    # ── 6. Overlay generation ─────────────────────────────────────────────
+    _t1 = _time.perf_counter()
+    overlay_path = OUTPUT_OVERLAYS_DIR / f"{sample_id}_overlay.png"
+    create_overlay_image(
+        image_path=str(temp_image_path),
+        detections=detections,
+        selected_panel=None,
+        buffer_zone=None,
+        output_path=str(overlay_path),
+        buffer_sqft=None,
+        imagery_sqft=IMAGERY_FETCH_SIZE_SQFT,
+        skip_buffer=True,
+    )
+    _t["overlay_s"] = _time.perf_counter() - _t1
+
+    # ── 7. Power estimate ─────────────────────────────────────────────────
+    _t1 = _time.perf_counter()
+    power_estimate = estimate_power_generation(total_area_sqm) if has_solar else {
+        "peak_power_kw": 0.0, "daily_energy_kwh": 0.0,
+        "monthly_energy_kwh": 0.0, "yearly_energy_kwh": 0.0,
+    }
+    _t["power_calc_s"] = _time.perf_counter() - _t1
+
+    # ── 8. Cleanup temp image ─────────────────────────────────────────────
+    _t1 = _time.perf_counter()
+    try:
+        if temp_image_path.exists():
+            temp_image_path.unlink()
+    except Exception as e:
+        logger.warning(f"[Sweep] Failed to delete temp image: {e}")
+    _t["cleanup_s"] = _time.perf_counter() - _t1
+
+    _t["total_s"] = _time.perf_counter() - _t0_total
+
+    return {
+        "sample_id": sample_id, "lat": lat, "lon": lon,
+        "has_solar": has_solar,
+        "confidence": round(confidence, 4),
+        "pv_area_sqm_est": round(total_area_sqm, 2),
+        "panel_count": len(detections),
+        "buffer_radius_sqft": 0,
+        "qc_status": qc_status,
+        "bbox_or_mask": bbox_or_mask,
+        "power_estimate": power_estimate,
+        "image_metadata": {"source": "ArcGIS World Imagery"},
+        "timing_s": _t,    # passed back for aggregate summary
+    }
+
+
+
 def process_excel_file(
     excel_path: str,
     model_path: str,
@@ -577,7 +781,7 @@ def process_excel_file(
 def main():
     """Main entry point for the pipeline."""
     parser = argparse.ArgumentParser(
-        description="End-to-end rooftop PV detection pipeline for NeuralStack Ecoinnovators ideathon"
+        description="End-to-end rooftop PV detection pipeline for NeuralStack"
     )
     parser.add_argument(
         "input_excel",

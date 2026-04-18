@@ -247,7 +247,8 @@ def create_overlay_image(
     buffer_zone: Optional[Dict] = None,
     output_path: str = None,
     buffer_sqft: int = None,
-    imagery_sqft: int = None
+    imagery_sqft: int = None,
+    skip_buffer: bool = False       # NEW: True for area-sweep (no buffer circles, all green)
 ) -> str:
     """
     Create an annotated overlay image showing detections and buffer zones.
@@ -282,8 +283,38 @@ def create_overlay_image(
         h, w = image.shape[:2]
         center = (w // 2, h // 2)
         
-        logger.info(f"Creating overlay for {len(detections)} detection(s)")
-        
+        logger.info(f"Creating overlay for {len(detections)} detection(s) (skip_buffer={skip_buffer})")
+
+        # ── SWEEP MODE: no buffer circles, all panels GREEN ──────────────
+        if skip_buffer:
+            for det in detections:
+                polygon = det.get("polygon", [])
+                bbox    = det.get("bbox", [])
+                conf    = det.get("confidence", 0)
+                if not polygon or len(polygon) < 3:
+                    continue
+                draw_polygon(image, polygon, (0, 200, 60), thickness=2, filled=True, alpha=0.45)
+                if bbox and len(bbox) >= 4:
+                    draw_bbox(image, bbox, (0, 200, 60), thickness=2, label=f"Solar {conf:.0%}")
+
+            # Legend
+            n = len(detections)
+            cv2.rectangle(image, (5, 5), (420, 60), (0, 0, 0), -1)
+            cv2.rectangle(image, (5, 5), (420, 60), (0, 200, 60), 2)
+            cv2.putText(image, "GREEN Fill: All detected solar panels",
+                        (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 60), 2)
+            cv2.putText(image, f"Total detected: {n} panel(s)",
+                        (10, 52), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+            if output_path:
+                out = Path(output_path)
+                out.parent.mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(str(out), image)
+                logger.info(f"Saved sweep overlay to {output_path}")
+                return str(out)
+            return None
+        # ── END SWEEP MODE ────────────────────────────────────────────────
+
         # Calculate buffer zone radii in pixels
         from .config import BUFFER_ZONE_1, BUFFER_ZONE_2
         from .buffer_geometry import compute_buffer_radius_pixels

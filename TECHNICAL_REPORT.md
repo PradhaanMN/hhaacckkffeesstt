@@ -1,5 +1,5 @@
 # Technical Report: Advanced Solar Panel Detection System
-## NeuralStack Ecoinnovators ideathon 2026 Submission
+## NeuralStack Submission
 
 **Team**: NeuralStack  
 **Date**: January 1, 2026  
@@ -1088,7 +1088,7 @@ The system achieves **97%+ mAP@0.5** while continuously collecting feedback for 
 ### C. Contact Information
 
 **Team**: NeuralStack  
-**Competition**: Ecoinnovators ideathon 2026  
+**Competition**:  
 **Date**: January 1, 2026  
 **Version**: 1.0  
 

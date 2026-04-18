@@ -45,3 +45,15 @@ htmlcov/
 build/
 dist/
 *.egg-info/
+
+# Large shapefiles (downloaded locally)
+tl_2023_us_zcta520/
+
+# Cache files
+cache/
+pipeline_code/cache/
+
+# Compiled Python files
+pipeline_code/backend/__pycache__/
+pipeline_code/model/__pycache__/
+pipeline_code/pipeline/__pycache__/
