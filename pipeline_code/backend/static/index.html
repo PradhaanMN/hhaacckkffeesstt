@@ -2379,18 +2379,135 @@
 
         // ── Single Export as PDF (fires first result's PDF via existing endpoint) ──
         async function exportSweepPDF() {
-            if (!_lastSweepData || !_lastSweepData.results.length) return;
-            const btn = document.getElementById('sweepExportBtn');
-            btn.textContent = 'Generating...'; btn.disabled = true;
-            // Export first result that has a numeric_id; for a batch PDF the
-            // easiest approach is to open each PDF sequentially in new tabs.
-            const solarResults = _lastSweepData.results.filter(r => r.numeric_id);
-            if (!solarResults.length) { alert('No results to export.'); btn.textContent = 'Export All Results as PDF'; btn.disabled = false; return; }
-            for (const r of solarResults.slice(0, 10)) {   // cap at 10 PDFs to avoid flood
-                window.open(`${API_BASE}/api/export/pdf/${r.numeric_id}`, '_blank');
-                await new Promise(res => setTimeout(res, 400));  // stagger to avoid browser block
+            if (!_lastSweepData || !_lastSweepData.results || !_lastSweepData.results.length) {
+                alert('No sweep results to export. Please run a scan first.');
+                return;
             }
-            btn.textContent = 'Export All Results as PDF'; btn.disabled = false;
+            const btn = document.getElementById('sweepExportBtn');
+            btn.textContent = 'Generating PDF...'; btn.disabled = true;
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                const d = _lastSweepData;
+                const W = 210, margin = 14;
+
+                // ── Header ────────────────────────────────────────────────────
+                doc.setFillColor(15, 23, 42);
+                doc.rect(0, 0, W, 32, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(16); doc.setFont(undefined, 'bold');
+                doc.text('Solar Panel Detection – Area Sweep Report', margin, 13);
+                doc.setFontSize(9); doc.setFont(undefined, 'normal');
+                doc.setTextColor(148, 163, 184);
+                doc.text('Generated: ' + new Date().toLocaleString(), margin, 21);
+                doc.text('AI-Powered Rooftop PV Detection System', margin, 27);
+
+                // ── Summary Stats ─────────────────────────────────────────────
+                doc.setTextColor(15, 23, 42);
+                doc.setFontSize(11); doc.setFont(undefined, 'bold');
+                doc.text('Scan Summary', margin, 42);
+                doc.setFont(undefined, 'normal'); doc.setFontSize(9);
+
+                const statsLeft = [
+                    ['Total Grid Points', d.total_grid_points?.toLocaleString() || '—'],
+                    ['Points Processed',  d.points_processed?.toString()       || '—'],
+                    ['Solar Detected',    d.points_with_solar?.toString()       || '—'],
+                    ['Total PV Area',     (d.total_pv_area_sqm || 0) + ' m²'],
+                    ['Processing Time',   (d.processing_time_s || 0) + ' s'],
+                    ['Errors',            (d.errors || 0).toString()],
+                ];
+                let statsRight = [];
+                const results = d.results || [];
+                let totalKw = 0, totalKwh = 0, totalSavings = 0, totalCO2 = 0, totalTrees = 0;
+                results.forEach(r => {
+                    const pe = r.power_estimate || {};
+                    totalKw      += pe.peak_power_kw       || 0;
+                    totalKwh     += pe.yearly_energy_kwh   || 0;
+                    totalSavings += pe.yearly_savings_inr  || 0;
+                    totalCO2     += pe.co2_reduction_kg_yr || 0;
+                    totalTrees   += pe.trees_equivalent_yr || 0;
+                });
+                const fmtInr = v => v >= 1e5 ? '₹' + (v/1e5).toFixed(1) + 'L' : '₹' + Math.round(v).toLocaleString('en-IN');
+                statsRight = [
+                    ['⚡ Peak Power',     totalKw.toFixed(2) + ' kWp'],
+                    ['🔋 Yearly Energy',  Math.round(totalKwh).toLocaleString() + ' kWh'],
+                    ['💰 Yearly Savings', fmtInr(totalSavings) + '/yr'],
+                    ['🌿 CO₂ Reduction',  Math.round(totalCO2).toLocaleString() + ' kg/yr'],
+                    ['🌳 Trees Equiv.',   Math.round(totalTrees).toLocaleString() + '/yr'],
+                ];
+
+                doc.autoTable({
+                    startY: 46, margin: { left: margin, right: W/2 + 2 },
+                    head: [['Metric', 'Value']], body: statsLeft,
+                    styles: { fontSize: 8.5, cellPadding: 2.5 },
+                    headStyles: { fillColor: [30, 41, 59], textColor: 255 },
+                    alternateRowStyles: { fillColor: [241, 245, 249] },
+                    tableWidth: W/2 - margin - 4,
+                });
+                doc.autoTable({
+                    startY: 46, margin: { left: W/2 + 2, right: margin },
+                    head: [['Environmental / Financial', 'Value']], body: statsRight,
+                    styles: { fontSize: 8.5, cellPadding: 2.5 },
+                    headStyles: { fillColor: [16, 185, 129], textColor: 255 },
+                    alternateRowStyles: { fillColor: [241, 245, 249] },
+                    tableWidth: W/2 - margin - 4,
+                });
+
+                // ── Per-tile Results Table ────────────────────────────────────
+                const afterStats = Math.max(doc.lastAutoTable.finalY, doc.previousAutoTable?.finalY || 0) + 8;
+                doc.setFontSize(11); doc.setFont(undefined, 'bold');
+                doc.setTextColor(15, 23, 42);
+                doc.text('Detection Results (' + results.length + ' tiles)', margin, afterStats + 4);
+
+                const rows = results.map(r => {
+                    const pe = r.power_estimate || {};
+                    return [
+                        r.sample_id?.toString().slice(-6) || '—',
+                        r.latitude?.toFixed(5)  || '—',
+                        r.longitude?.toFixed(5) || '—',
+                        r.has_solar ? 'YES' : 'NO',
+                        ((r.confidence || 0) * 100).toFixed(1) + '%',
+                        (r.pv_area_sqm_est || 0) + ' m²',
+                        (pe.peak_power_kw || 0) + ' kWp',
+                        pe.yearly_savings_inr >= 1e5
+                            ? '₹' + (pe.yearly_savings_inr/1e5).toFixed(1) + 'L'
+                            : '₹' + Math.round(pe.yearly_savings_inr || 0).toLocaleString('en-IN'),
+                        Math.round(pe.co2_reduction_kg_yr || 0) + ' kg',
+                    ];
+                });
+
+                doc.autoTable({
+                    startY: afterStats + 7, margin: { left: margin, right: margin },
+                    head: [['ID', 'Lat', 'Lon', 'Solar', 'Conf', 'PV Area', 'Power', 'Savings/yr', 'CO₂/yr']],
+                    body: rows,
+                    styles: { fontSize: 7, cellPadding: 2 },
+                    headStyles: { fillColor: [30, 41, 59], textColor: 255, fontSize: 7.5 },
+                    alternateRowStyles: { fillColor: [248, 250, 252] },
+                    didParseCell: (data) => {
+                        if (data.section === 'body' && data.column.index === 3) {
+                            data.cell.styles.textColor = data.cell.raw === 'YES' ? [5, 150, 105] : [217, 119, 6];
+                            data.cell.styles.fontStyle = 'bold';
+                        }
+                    },
+                });
+
+                // ── Footer ────────────────────────────────────────────────────
+                const pageCount = doc.getNumberOfPages();
+                for (let p = 1; p <= pageCount; p++) {
+                    doc.setPage(p);
+                    doc.setFontSize(7.5); doc.setTextColor(150, 150, 150);
+                    doc.text('Solar Detection AI  |  Page ' + p + ' of ' + pageCount, W/2, 292, { align: 'center' });
+                }
+
+                const fn = 'sweep_report_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.pdf';
+                doc.save(fn);
+            } catch(e) {
+                console.error('PDF generation error:', e);
+                alert('PDF generation failed: ' + e.message);
+            } finally {
+                btn.textContent = 'Export All Results as PDF'; btn.disabled = false;
+            }
         }
 
         // ── Download full JSON ──
