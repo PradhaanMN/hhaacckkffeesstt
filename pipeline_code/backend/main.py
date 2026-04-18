@@ -19,10 +19,7 @@ import numpy as np
 from datetime import datetime
 
 # ── US Zipcode Shapefile (lazy-loaded on first request) ───────────────────────
-_ZIPSHP = Path(
-    r"D:\hackfest\sinchan_adithya_pradhaan_neural_stack_eco_innovators"
-    r"\tl_2023_us_zcta520\tl_2023_us_zcta520.shp"
-)
+_ZIPSHP = Path(__file__).resolve().parents[2] / "tl_2023_us_zcta520" / "tl_2023_us_zcta520.shp"
 _zipcode_gdf = None           # populated on first /api/zipcode call
 
 def _get_zipcode_gdf():
@@ -242,7 +239,7 @@ def validate_sample_id(sample_id: int) -> tuple[bool, str]:
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="NeuralStack Rooftop PV Detection API",
+    title="Rooftop PV Detection API",
     description="Governance-ready digital verification pipeline for PM Surya Ghar",
     version="1.0.0"
 )
@@ -407,7 +404,7 @@ async def root():
     html_file = Path(__file__).parent / "static" / "index.html"
     if html_file.exists():
         return FileResponse(html_file)
-    return {"message": "NeuralStack Rooftop PV Detection API", "status": "running"}
+    return {"message": "Rooftop PV Detection API", "status": "running"}
 
 
 @app.get("/health")
@@ -1190,7 +1187,7 @@ if __name__ == "__main__":
     Path(OUTPUT_PREDICTIONS_DIR).mkdir(parents=True, exist_ok=True)
     Path(OUTPUT_OVERLAYS_DIR).mkdir(parents=True, exist_ok=True)
     
-    logger.info("Starting NeuralStack Rooftop PV Detection API...")
+    logger.info("Starting Rooftop PV Detection API...")
     logger.info(f"Model path: {MODEL_WEIGHTS_PATH}")
     logger.info(f"Output predictions: {OUTPUT_PREDICTIONS_DIR}")
     logger.info(f"Output overlays: {OUTPUT_OVERLAYS_DIR}")

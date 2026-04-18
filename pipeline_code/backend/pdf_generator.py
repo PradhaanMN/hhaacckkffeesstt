@@ -264,7 +264,7 @@ def create_pdf_report(
     
     # Footer
     footer_text = Paragraph(
-        "<b>NeuralStack</b><br/>"
+        "<b>Solar Detection AI</b><br/>"
         "PM Surya Ghar: Muft Bijli Yojana - AI-Powered Rooftop PV Detection<br/>"
         "<i>This report is generated automatically using advanced AI detection algorithms.</i>",
         ParagraphStyle(

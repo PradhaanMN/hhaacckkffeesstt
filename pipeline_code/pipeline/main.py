@@ -781,7 +781,7 @@ def process_excel_file(
 def main():
     """Main entry point for the pipeline."""
     parser = argparse.ArgumentParser(
-        description="End-to-end rooftop PV detection pipeline for NeuralStack"
+        description="End-to-end rooftop PV detection pipeline"
     )
     parser.add_argument(
         "input_excel",
@@ -821,7 +821,7 @@ def main():
     
     # Run pipeline
     logger.info("=" * 80)
-    logger.info("NeuralStack Rooftop PV Detection Pipeline")
+    logger.info("Rooftop PV Detection Pipeline")
     logger.info("=" * 80)
     
     predictions = process_excel_file(

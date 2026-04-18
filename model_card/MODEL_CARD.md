@@ -1,18 +1,18 @@
 # Model Card: Solar Panel Detection System
-## NeuralStack Submission
+## Solar Detection AI Submission
 
 ---
 
 ## 1. Model Details
 
 ### 1.1 Basic Information
-- **Model Name**: NeuralStack Solar Panel Detection System
+- **Model Name**: Solar Panel Detection System
 - **Version**: 4.0 (Hybrid Ensemble/Adversarial with TTA)
 - **Date**: December 2025
 - **Model Type**: Object Detection & Instance Segmentation
 - **Architecture**: YOLOv8 (You Only Look Once v8)
 - **Framework**: Ultralytics YOLO, PyTorch
-- **License**: Model weights proprietary to NeuralStack team
+- **License**: Model weights proprietary to the development team
 
 ### 1.2 Model Architecture
 Our system employs a **state-of-the-art multi-strategy ensemble** approach:
@@ -533,7 +533,7 @@ Response:
 
 ## 8. Contact & Support
 
-**Team**: NeuralStack  
+**Team**: Solar Detection AI  
 **Competition**:  
 **Documentation**: See README.md, EVALUATOR_GUIDE.md  
 **Technical Details**: See [TECHNICAL_REPORT.md](../TECHNICAL_REPORT.md)  
@@ -593,5 +593,5 @@ Response:
 
 ---
 
-*This model card provides comprehensive documentation for the NeuralStack Solar Panel Detection System, ensuring transparency, reproducibility, and responsible AI deployment.*
+*This model card provides comprehensive documentation for the Solar Panel Detection System, ensuring transparency, reproducibility, and responsible AI deployment.*
 

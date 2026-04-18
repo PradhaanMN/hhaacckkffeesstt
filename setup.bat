@@ -1,13 +1,13 @@
 @echo off
 REM ================================================================================
 REM Solar Panel Detection System - Quick Setup
-REM NeuralStack
+REM Solar Panel Detection System
 REM ================================================================================
 
 echo.
 echo ================================================================================
 echo   SOLAR PANEL DETECTION SYSTEM - SETUP
-echo   NeuralStack
+echo   Solar Panel Detection System
 echo ================================================================================
 echo.
 

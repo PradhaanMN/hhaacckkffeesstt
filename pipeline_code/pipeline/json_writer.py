@@ -1,5 +1,5 @@
 """
-JSON writer for creating output files in the required NeuralStack format.
+JSON writer for creating output files in the required format.
 """
 
 import json

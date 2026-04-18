@@ -417,7 +417,7 @@ Compress-Archive -Path @(
   'TECHNICAL_REPORT.md',
   '.gitignore',
   '.gitattributes'
-) -DestinationPath 'NeuralStack_Submission.zip' -Force
+) -DestinationPath 'SolarDetectionAI_Submission.zip' -Force
 ```
 
 ---
@@ -451,7 +451,7 @@ Compress-Archive -Path @(
 - `.env.example` - Environment variable template
 
 **Contact**:
-- Team: NeuralStack
+- Team: Solar Detection AI
 - Competition:
 - Date: December 2025
 

@@ -1,4 +1,4 @@
-# 🌞 Solar Panel Detection System - NeuralStack
+# 🌞 Solar Panel Detection System
 
 > **For Evaluators**: Start with [EVALUATOR_GUIDE.md](EVALUATOR_GUIDE.md) for a comprehensive overview and quick demo.
 
@@ -140,11 +140,11 @@ python -c "import torch; import ultralytics; print('✓ Installation successful'
 
 ---
 
-## 🎯 End-to-End Inference Pipeline (NeuralStack)
+## 🎯 End-to-End Inference Pipeline
 
 ### Overview
 
-Complete pipeline for rooftop PV detection following NeuralStack specifications:
+Complete pipeline for rooftop PV detection following the project specifications:
 - **Input**: Excel file with coordinates (sample_id, latitude, longitude)
 - **Processing**: Automated imagery fetching, AI inference, buffer zone analysis
 - **Output**: JSON predictions + visual overlays
@@ -188,7 +188,7 @@ Excel file (.xlsx) with required columns:
 
 ### Output Format
 
-Each location generates a JSON file following the exact ideathon specification:
+Each location generates a JSON file following the exact hackathon specification:
 
 ```json
 {
@@ -247,7 +247,7 @@ python pipeline/main.py inputs/samples.xlsx \
 
 ### Buffer Zone Logic
 
-The pipeline implements a two-tier buffer strategy per ideathon requirements:
+The pipeline implements a two-tier buffer strategy per hackathon requirements:
 
 1. **Primary Buffer (1200 sq.ft)**:
    - Converts to square in meters: ~111.48 m² → 10.56m × 10.56m

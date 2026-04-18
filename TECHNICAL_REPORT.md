@@ -1,7 +1,7 @@
 # Technical Report: Advanced Solar Panel Detection System
-## NeuralStack Submission
+## Solar Detection AI Submission
 
-**Team**: NeuralStack  
+**Team**: Solar Detection AI  
 **Date**: January 1, 2026  
 **Version**: 1.0  
 **System**: Rooftop Solar Panel Detection with AI Ensemble & Reinforcement Learning
@@ -1087,7 +1087,7 @@ The system achieves **97%+ mAP@0.5** while continuously collecting feedback for 
 
 ### C. Contact Information
 
-**Team**: NeuralStack  
+**Team**: Solar Detection AI  
 **Competition**:  
 **Date**: January 1, 2026  
 **Version**: 1.0  

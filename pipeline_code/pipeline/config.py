@@ -1,5 +1,5 @@
 """
-Configuration file for the NeuralStack pipeline.
+Configuration file for the detection pipeline.
 Contains paths, constants, and settings.
 """
 

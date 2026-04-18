@@ -1,7 +1,7 @@
 @echo off
 REM ================================================================================
 REM Solar Panel Detection System - Start Server
-REM NeuralStack
+REM Solar Panel Detection System
 REM ================================================================================
 
 echo.
